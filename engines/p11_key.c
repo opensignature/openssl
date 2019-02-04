@@ -369,6 +369,16 @@ int pkcs11_authenticate(PKCS11_KEY *key)
 		return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
 	}
 
+        e = ENGINE_by_id("pkcs11");
+        ctxengine = get_ctx(e);
+
+        if (ctxengine->pin != NULL) {
+                rv = CRYPTOKI_call(ctx,
+                                   C_Login(spriv->session, CKU_CONTEXT_SPECIFIC,
+                                   (CK_UTF8CHAR *)ctxengine->pin, strlen(ctxengine->pin)));
+                return rv == CKR_USER_ALREADY_LOGGED_IN ? 0 : rv;
+        }
+
 	/* Call UI to ask for a PIN */
 	ui = UI_new_method(cpriv->ui_method);
 	if (ui == NULL)
