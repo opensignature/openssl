@@ -18,7 +18,6 @@
  */
 
 #include "libp11-int.h"
-#include "engine.h"
 #include <string.h>
 #include <openssl/ui.h>
 #include <openssl/bn.h>
