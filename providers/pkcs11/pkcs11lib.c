@@ -13,16 +13,6 @@
 #include <internal/nelem.h>
 #include <openssl/bn.h>
 
-typedef CK_RV pkcs11_pFunc(CK_FUNCTION_LIST **pkcs11_funcs);
-static CK_RV pkcs11_load_functions(const char *library_path);
-static CK_FUNCTION_LIST *pkcs11_funcs;
-static int pkcs11_get_key(OSSL_STORE_LOADER_CTX *store_ctx,
-                          CK_OBJECT_HANDLE obj);
-static int pkcs11_get_cert(OSSL_STORE_LOADER_CTX *store_ctx,
-                           CK_OBJECT_HANDLE obj);
-static int RSA_encode_pkcs1(unsigned char **out, int *out_len, int type,
-                            const unsigned char *m, unsigned int m_len);
-
 int rsa_pkcs11_idx = -1;
 
 int pkcs11_rsa_sign(int alg, const unsigned char *md,
@@ -904,4 +894,356 @@ static int RSA_encode_pkcs1(unsigned char **out, int *out_len, int type,
     *out = der;
     *out_len = len;
     return 1;
+}
+
+static char pkcs11_hex_int(char nib1, char nib2)
+{
+    int ret = (nib1-(nib1 <= 57 ? 48 : (nib1 < 97 ? 55 : 87)))*16;
+    ret += (nib2-(nib2 <= 57 ? 48 : (nib2 < 97 ? 55 : 87)));
+    return ret;
+}
+
+static char* pkcs11_hex2a(char *hex)
+{
+    int vlen, j = 0, i, ishex;
+    char *hex2a;
+
+    hex2a = OPENSSL_malloc(strlen(hex) + 1);
+
+    if (hex2a == NULL)
+        return NULL;
+
+    vlen = strlen(hex);
+    ishex = pkcs11_ishex(hex);
+    for (i = 0; i < vlen; i++) {
+        if ((*(hex+i) == '%' && i < (vlen-2)) || ishex) {
+            *(hex2a+j) = pkcs11_hex_int(*(hex+i+1-ishex), *(hex+i+2-ishex));
+            i += (2-ishex);
+        } else {
+            *(hex2a+j) = *(hex+i);
+        }
+        j++;
+    }
+    *(hex2a+j) = '\0';
+    return hex2a;
+}
+
+static int pkcs11_ishex(char *hex)
+{
+    size_t i, len, h = 0;
+
+    len = strlen(hex);
+    for (i = 0; i < len; i++) {
+        if ((*(hex+i) >= '0' && *(hex+i) <= '9')
+            || (*(hex+i) >= 'a' && *(hex+i) <= 'f')
+            || (*(hex+i) >= 'A' && *(hex+i) <= 'F'))
+            h++;
+        else
+            return 0;
+    }
+    if (!(h % 2))
+        return 1;
+    return 0;
+}
+
+static int pkcs11_parse_items(PKCS11_CTX *ctx, const char *uri)
+{
+    char *p, *q, *tmpstr;
+    int len = 0;
+
+    p = q = (char *) uri;
+    len = strlen(uri);
+
+    while (q - uri <= len) {
+        if (*q != ';' && *q != '\0') {
+            q++;
+            continue;
+        }
+        if (p != q) {
+            /* found */
+            *q = '\0';
+            if (strncmp(p, "pin-value=", 10) == 0 && ctx->pin == NULL) {
+                p += 10;
+                tmpstr = OPENSSL_strdup(p);
+                if (tmpstr == NULL)
+                    goto memerr;
+                ctx->pin = (CK_BYTE *) tmpstr;
+            } else if (strncmp(p, "object=", 7) == 0 && ctx->label == NULL) {
+                p += 7;
+                tmpstr = OPENSSL_strdup(p);
+                if (tmpstr == NULL)
+                    goto memerr;
+                ctx->label = (CK_BYTE *) pkcs11_hex2a(tmpstr);
+            } else if (strncmp(p, "id=", 3) == 0 && ctx->id == NULL) {
+                p += 3;
+                tmpstr = OPENSSL_strdup(p);
+                if (tmpstr == NULL)
+                    goto memerr;
+                ctx->id = (CK_BYTE *) pkcs11_hex2a(tmpstr);
+            } else if (strncmp(p, "type=", 5) == 0 && ctx->type == NULL) {
+                p += 5;
+                tmpstr = OPENSSL_strdup(p);
+                if (tmpstr == NULL)
+                    goto memerr;
+                ctx->type = tmpstr;
+            } else if (strncmp(p, "module-path=", 12) == 0
+                && ctx->module_path == NULL) {
+                p += 12;
+                tmpstr = OPENSSL_strdup(p);
+                if (tmpstr == NULL)
+                    goto memerr;
+                ctx->module_path = tmpstr;
+            } else if (strncmp(p, "slot-id=", 8) == 0 && ctx->slotid == 0) {
+                p += 8;
+                tmpstr = OPENSSL_strdup(p);
+                if (tmpstr == NULL)
+                    goto memerr;
+                ctx->slotid = (CK_SLOT_ID) atoi(tmpstr);
+            }
+        }
+        p = ++q;
+    }
+    return 1;
+
+ memerr:
+    PKCS11err(PKCS11_F_PKCS11_PARSE_ITEMS, ERR_R_MALLOC_FAILURE);
+    return 0;
+}
+
+static int pkcs11_get_console_pin(char **pin)
+{
+#ifndef OPENSSL_NO_UI_CONSOLE
+    int i;
+    const int buflen = 512;
+    char *strbuf = OPENSSL_malloc(buflen);
+
+    if (strbuf == NULL) {
+        PKCS11err(PKCS11_F_PKCS11_GET_CONSOLE_PIN, ERR_R_MALLOC_FAILURE);
+        return 0;
+    }
+
+    for (;;) {
+        char prompt[200];
+        BIO_snprintf(prompt, sizeof(prompt), "Enter PIN: ");
+        strbuf[0] = '\0';
+        i = EVP_read_pw_string((char *)strbuf, buflen, prompt, 0);
+        if (i == 0) {
+            if (strbuf[0] == '\0') {
+                goto err;
+            }
+            *pin = strbuf;
+            return 1;
+        }
+        if (i < 0) {
+            PKCS11_trace("bad password read\n");
+            goto err;
+        }
+    }
+
+ err:
+    OPENSSL_free(strbuf);
+#endif
+
+    return 0;
+}
+
+static int pkcs11_parse(PKCS11_CTX *ctx, const char *path, int store)
+{
+    char *pin = NULL;
+    char *id = NULL;
+
+    if (path == NULL) {
+        PKCS11_trace("URI is empty\n");
+        return 0;
+    }
+
+    if (strncmp(path, "pkcs11:", 7) == 0) {
+        path += 7;
+        pkcs11_parse_items(ctx, path);
+
+        if (ctx->id == NULL && ctx->label == NULL && !store) {
+            PKCS11_trace("ID and OBJECT are null\n");
+            goto err;
+         }
+    } else {
+        id = OPENSSL_strdup(path);
+        if (id == NULL) {
+            PKCS11err(PKCS11_F_PKCS11_PARSE, ERR_R_MALLOC_FAILURE);
+            goto err;
+        }
+        id = pkcs11_hex2a(id);
+    }
+
+    if (ctx->module_path == NULL) {
+            PKCS11_trace("Module path is null\n");
+            goto err;
+    }
+
+    if (ctx->pin == NULL && (!store || (store
+        && ctx->type != NULL && strncmp(ctx->type, "private", 7) == 0))) {
+        if (!pkcs11_get_console_pin(&pin))
+            goto err;
+        ctx->pin = (CK_BYTE *) pin;
+        if (ctx->pin == NULL) {
+            PKCS11_trace("PIN is invalid\n");
+            goto err;
+        }
+    }
+    return 1;
+
+ err:
+    return 0;
+}
+
+static OSSL_STORE_LOADER_CTX* pkcs11_store_open(
+    const OSSL_STORE_LOADER *loader, const char *uri,
+    const UI_METHOD *ui_method, void *ui_data)
+{
+    PKCS11_CTX *pkcs11_ctx;
+    OSSL_STORE_LOADER_CTX *store_ctx = NULL;
+    CK_SESSION_HANDLE session = 0;
+
+    store_ctx = OSSL_STORE_LOADER_CTX_new();
+
+    /* TODO
+    pkcs11_ctx = ENGINE_get_ex_data(e, pkcs11_idx);
+    */
+
+    if (pkcs11_ctx == NULL)
+        return NULL;
+
+    if (!pkcs11_parse(pkcs11_ctx, uri, 1))
+        return NULL;
+
+    if (pkcs11_initialize(pkcs11_ctx->module_path) != CKR_OK)
+        return NULL;
+
+    if (!pkcs11_get_slot(pkcs11_ctx))
+        return NULL;
+
+    if (!pkcs11_start_session(pkcs11_ctx, &session))
+        return NULL;
+
+    /* NEW store-ctx->session, not a copy of pkcs11_ctx->session */
+    store_ctx->session = session;
+
+    if (!pkcs11_search_start(store_ctx, pkcs11_ctx))
+        return NULL;
+
+    if (pkcs11_ctx->label == NULL && pkcs11_ctx->id == NULL)
+        store_ctx->listflag = 1;    /* we want names */
+
+    return store_ctx;
+}
+
+static OSSL_STORE_INFO* pkcs11_store_load(OSSL_STORE_LOADER_CTX *ctx,
+                                          const UI_METHOD *ui_method,
+                                          void *ui_data)
+{
+    OSSL_STORE_INFO *ret = NULL;
+
+    if (ctx->listflag) {
+        char *name;
+        char *description;
+
+        ctx->eof = pkcs11_search_next_ids(ctx, &name, &description);
+        if (!ctx->eof) {
+            ret = OSSL_STORE_INFO_new_NAME(name);
+            OSSL_STORE_INFO_set0_NAME_description(ret, description);
+        }
+    } else {
+        CK_OBJECT_CLASS class;
+
+        ctx->eof = pkcs11_search_next_object(ctx, &class);
+        if (!ctx->eof) {
+            if (class == CKO_CERTIFICATE)
+                ret = pkcs11_store_load_cert(ctx, ui_method, ui_data);
+            if (class == CKO_PUBLIC_KEY)
+                ret = pkcs11_store_load_key(ctx, ui_method, ui_data);
+        }
+    }
+    return ret;
+}
+
+static int pkcs11_store_eof(OSSL_STORE_LOADER_CTX *ctx)
+{
+    return ctx->eof;
+}
+
+static int pkcs11_store_close(OSSL_STORE_LOADER_CTX *ctx)
+{
+    pkcs11_end_session(ctx->session);
+    pkcs11_finalize();
+    OSSL_STORE_LOADER_CTX_free(ctx);
+    return 1;
+}
+
+static int pkcs11_store_error(OSSL_STORE_LOADER_CTX *ctx)
+{
+/* TODO */
+    return 0;
+}
+
+static OSSL_STORE_LOADER_CTX* OSSL_STORE_LOADER_CTX_new(void)
+{
+    OSSL_STORE_LOADER_CTX *ctx;
+
+    ctx = OPENSSL_zalloc(sizeof(*ctx));
+    if (ctx == NULL)
+        return NULL;
+    ctx->error = 0;
+    ctx->listflag = 0;
+    ctx->eof = 0;
+    ctx->cert = NULL;
+    ctx->session = 0;
+    return ctx;
+}
+
+static void OSSL_STORE_LOADER_CTX_free(OSSL_STORE_LOADER_CTX* ctx)
+{
+    if (ctx == NULL)
+        return;
+    OPENSSL_free(ctx);
+}
+
+static OSSL_STORE_INFO* pkcs11_store_load_cert(OSSL_STORE_LOADER_CTX *ctx,
+                                               const UI_METHOD *ui_method,
+                                               void *ui_data)
+{
+    X509 *x = NULL;
+
+    x = d2i_X509(NULL, &ctx->cert, ctx->certlen);
+    return OSSL_STORE_INFO_new_CERT(x);
+}
+
+static OSSL_STORE_INFO* pkcs11_store_load_key(OSSL_STORE_LOADER_CTX *ctx,
+                                               const UI_METHOD *ui_method,
+                                               void *ui_data)
+{
+    return OSSL_STORE_INFO_new_PKEY(ctx->key);
+}
+
+static PKCS11_CTX *pkcs11_ctx_new(void)
+{
+    PKCS11_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
+    if (ctx == NULL) {
+        PKCS11err(PKCS11_F_PKCS11_CTX_NEW, ERR_R_MALLOC_FAILURE);
+        return NULL;
+    }
+    ctx->lock = CRYPTO_THREAD_lock_new();
+    return ctx;
+}
+
+static int pkcs11_rsa_free(RSA *rsa)
+{
+    RSA_set_ex_data(rsa, rsa_pkcs11_idx, 0);
+    return 1;
+}
+
+static void pkcs11_ctx_free(PKCS11_CTX *ctx)
+{
+    PKCS11_trace("Calling pkcs11_ctx_free with %p\n", ctx);
+    CRYPTO_THREAD_lock_free(ctx->lock);
+    free(ctx->id);
+    free(ctx->label);
 }
