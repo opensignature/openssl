@@ -1,1 +1,1 @@
-SUBDIRS=common default
+SUBDIRS=common default pkcs11
