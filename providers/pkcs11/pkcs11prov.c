@@ -13,6 +13,7 @@
 #include <openssl/core_numbers.h>
 #include <openssl/core_names.h>
 #include <openssl/params.h>
+#include <openssl/pem.h>
 
 /* Functions provided by the core */
 static OSSL_core_get_param_types_fn *c_get_param_types = NULL;
