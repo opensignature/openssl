@@ -1,3 +1,4 @@
-LIBS=../../libcrypto
-SOURCE[../../libcrypto]=\
-        pkcs11prov.c pkcs11lib.c
+
+SOURCE[../pkcs11]=pkcs11prov.c pkcs11lib.c
+INCLUDE[../pkcs11]=../implementations/include ../common/include
+

@@ -150,3 +150,15 @@ IF[{- !$disabled{legacy} -}]
   SOURCE[$LEGACYGOAL]=legacyprov.c
   INCLUDE[$LEGACYGOAL]=../include implementations/include
 ENDIF
+
+#
+# PKCS#11 provider stuff
+#
+SUBDIRS=pkcs11
+$PKCS11GOAL=pkcs11
+DEPEND[$PKCS11GOAL]=$LIBIMPLEMENTATIONS $LIBNONFIPS
+INCLUDE[$PKCS11GOAL]=../include
+
+IF[{- !$disabled{pkcs11} -}]
+  MODULES=$PKCS11GOAL
+ENDIF
