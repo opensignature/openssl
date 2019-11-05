@@ -652,6 +652,10 @@ IF[{- !$disabled{tests} -}]
   INCLUDE[context_internal_test]=.. ../include ../apps/include
   DEPEND[context_internal_test]=../libcrypto.a libtestutil.a
 
+  PROGRAMS{noinst}=provider_pkcs11_test
+  SOURCE[provider_pkcs11_test]=provider_pkcs11_test.c
+  INCLUDE[provider_pkcs11_test]=../include ../apps/include
+  DEPEND[provider_pkcs11_test]=../libcrypto.a libtestutil.a
   PROGRAMS{noinst}=provider_internal_test
   DEFINE[provider_internal_test]=PROVIDER_INIT_FUNCTION_NAME=p_test_init
   SOURCE[provider_internal_test]=provider_internal_test.c p_test.c
@@ -673,6 +677,7 @@ IF[{- !$disabled{tests} -}]
   ENDIF
   IF[{- $disabled{module} || !$target{dso_scheme} -}]
     DEFINE[provider_test]=NO_PROVIDER_MODULE
+    DEFINE[provider_pkcs11_test]=NO_PROVIDER_MODULE
     DEFINE[provider_internal_test]=NO_PROVIDER_MODULE
   ENDIF
   DEPEND[]=provider_internal_test.conf
