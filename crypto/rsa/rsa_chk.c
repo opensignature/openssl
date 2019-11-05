@@ -9,7 +9,7 @@
 
 #include <openssl/bn.h>
 #include <openssl/err.h>
-#include "rsa_locl.h"
+#include "rsa_local.h"
 
 int RSA_check_key(const RSA *key)
 {
@@ -25,11 +25,9 @@ int RSA_check_key(const RSA *key)
 int RSA_check_key_ex(const RSA *key, BN_GENCB *cb)
 {
 #ifdef FIPS_MODE
-    if (!(rsa_sp800_56b_check_public(key)
-            && rsa_sp800_56b_check_private(key)
-            && rsa_sp800_56b_check_keypair(key, NULL, -1, RSA_bits(key))
-        return 0;
-
+    return rsa_sp800_56b_check_public(key)
+               && rsa_sp800_56b_check_private(key)
+               && rsa_sp800_56b_check_keypair(key, NULL, -1, RSA_bits(key));
 #else
     BIGNUM *i, *j, *k, *l, *m;
     BN_CTX *ctx;
@@ -75,13 +73,13 @@ int RSA_check_key_ex(const RSA *key, BN_GENCB *cb)
     }
 
     /* p prime? */
-    if (BN_is_prime_ex(key->p, BN_prime_checks, NULL, cb) != 1) {
+    if (BN_check_prime(key->p, NULL, cb) != 1) {
         ret = 0;
         RSAerr(RSA_F_RSA_CHECK_KEY_EX, RSA_R_P_NOT_PRIME);
     }
 
     /* q prime? */
-    if (BN_is_prime_ex(key->q, BN_prime_checks, NULL, cb) != 1) {
+    if (BN_check_prime(key->q, NULL, cb) != 1) {
         ret = 0;
         RSAerr(RSA_F_RSA_CHECK_KEY_EX, RSA_R_Q_NOT_PRIME);
     }
@@ -89,7 +87,7 @@ int RSA_check_key_ex(const RSA *key, BN_GENCB *cb)
     /* r_i prime? */
     for (idx = 0; idx < ex_primes; idx++) {
         pinfo = sk_RSA_PRIME_INFO_value(key->prime_infos, idx);
-        if (BN_is_prime_ex(pinfo->r, BN_prime_checks, NULL, cb) != 1) {
+        if (BN_check_prime(pinfo->r, NULL, cb) != 1) {
             ret = 0;
             RSAerr(RSA_F_RSA_CHECK_KEY_EX, RSA_R_MP_R_NOT_PRIME);
         }
