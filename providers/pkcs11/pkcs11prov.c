@@ -70,5 +70,6 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
     }
 
     *out = pkcs11_dispatch_table;
+    *vprovctx = (void *)provider;
     return 1;
 }
