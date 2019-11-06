@@ -18,22 +18,48 @@
 /* Functions provided by the core */
 static OSSL_core_get_params_fn *c_get_params = NULL;
 
-static int pkcs11_get_params(const OSSL_PROVIDER *prov,
-                             OSSL_PARAM params[])
+static const OSSL_PARAM pkcs11_param_types[] = {
+    { "module_path", OSSL_PARAM_UTF8_STRING, NULL, 0, 0 },
+    { NULL, 0, NULL, 0, 0 }
+};
+static OSSL_provider_gettable_params_fn pkcs11_gettable_params;
+static OSSL_provider_get_params_fn pkcs11_get_params;
+
+static const OSSL_PARAM *pkcs11_gettable_params(void *_)
 {
-    OSSL_PARAM *p;
+    return pkcs11_param_types;
+}
 
-    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_NAME);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "OpenSSL PKCS#11 Provider"))
-        return 0;
-    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_VERSION);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, OPENSSL_VERSION_STR))
-        return 0;
-    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_BUILDINFO);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, OPENSSL_FULL_VERSION_STR))
-        return 0;
+static int pkcs11_get_params(void *vprov, OSSL_PARAM params[])
+{
+    const OSSL_PROVIDER *prov = vprov;
+    OSSL_PARAM *p = params;
+    int ok = 1;
 
-    return 1;
+    for (; ok && p->key != NULL; p++) {
+        if (strcmp(p->key, "module_path") == 0) {
+            static char *module_path;
+            static OSSL_PARAM request[] = {
+                { "module_path", OSSL_PARAM_UTF8_PTR,
+                  &module_path, sizeof(&module_path), 0 },
+                { NULL, 0, NULL, 0, 0 }
+            };
+            char buf[256];
+            size_t buf_l;
+            module_path = NULL;
+            if (c_get_params(prov, request)) {
+                if (module_path) {
+                    strcpy(buf, module_path);
+                }
+            }
+            p->return_size = buf_l = strlen(buf) + 1;
+            if (p->data_size >= buf_l)
+                strcpy(p->data, buf);
+            else
+                ok = 0;
+        }
+    }
+    return ok;
 }
 
 static const OSSL_ALGORITHM *pkcs11_query(OSSL_PROVIDER *prov,
@@ -49,6 +75,7 @@ static const OSSL_ALGORITHM *pkcs11_query(OSSL_PROVIDER *prov,
 /* Functions we provide to the core */
 static const OSSL_DISPATCH pkcs11_dispatch_table[] = {
     { OSSL_FUNC_PROVIDER_GET_PARAMS, (void (*)(void))pkcs11_get_params },
+    { OSSL_FUNC_PROVIDER_GETTABLE_PARAMS, (void (*)(void))pkcs11_gettable_params },
     { OSSL_FUNC_PROVIDER_QUERY_OPERATION, (void (*)(void))pkcs11_query },
     { 0, NULL }
 };
@@ -58,6 +85,14 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
                        const OSSL_DISPATCH **out,
                        void **vprovctx)
 {
+    static char *module_path = NULL;
+    static OSSL_PARAM request[] = {
+        { "module_path", OSSL_PARAM_UTF8_PTR,
+          &module_path, sizeof(&module_path), 0 },
+          { NULL, 0, NULL, 0, 0 }
+        };
+    char buf[256];
+
     for (; in->function_id != 0; in++) {
         switch (in->function_id) {
         case OSSL_FUNC_CORE_GET_PARAMS:
@@ -71,5 +106,14 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
 
     *out = pkcs11_dispatch_table;
     *vprovctx = (void *)provider;
+
+    if (c_get_params(provider, request)) {
+        if (module_path) {
+            strcpy(buf, module_path);
+        }
+    }
+
+/* TODO store module_path in ctx */
+
     return 1;
 }
