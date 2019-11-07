@@ -17,6 +17,11 @@
 #include "pkcs11_err.h"
 #include "pkcs11prov.h"
 
+static OSSL_OP_keymgmt_importkey_fn pkcs11_rsa_importkey;
+
+DEFINE_STACK_OF(BIGNUM)
+DEFINE_SPECIAL_STACK_OF_CONST(BIGNUM_const, BIGNUM)
+
 static PKCS11_CTX *pkcs11_ctx_new(void);
 
 /* Functions provided by the core */
@@ -31,31 +36,44 @@ static const OSSL_PARAM pkcs11_param_types[] = {
 static OSSL_provider_gettable_params_fn pkcs11_gettable_params;
 static OSSL_provider_get_params_fn pkcs11_get_params;
 
+static int pkcs11_params_to_key(RSA *rsa, const OSSL_PARAM params[]);
+
 static const OSSL_PARAM *pkcs11_gettable_params(void *_)
 {
     return pkcs11_param_types;
 }
 
+static void *pkcs11_rsa_importkey(void *provctx, const OSSL_PARAM params[])
+{
+    RSA *rsa;
+
+    if ((rsa = RSA_new()) == NULL) {
+        RSA_free(rsa);
+        rsa = NULL;
+    }
+/* TODO */
+    return rsa;
+}
+
 static int pkcs11_get_params(void *vprov, OSSL_PARAM params[])
 {
     OSSL_PARAM *p = params;
-
-    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_NAME);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "OpenSSL Pkcs#11 Provider"))
-        return 0;
-    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_VERSION);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, OPENSSL_VERSION_STR))
-        return 0;
-    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_BUILDINFO);
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "module_path"))
-    p = OSSL_PARAM_locate(params, "module_path");
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "pin"))
-    p = OSSL_PARAM_locate(params, "pin");
-    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "keylabel"))
-    p = OSSL_PARAM_locate(params, "keylabel");
-
+    PKCS11_CTX *pkcs11_ctx = vprov;
+    /* Only for test */
+    p->data = pkcs11_ctx->module_path;
     return 1;
 }
+
+const OSSL_DISPATCH pkcs11_rsa_keymgmt_functions[] = {
+    { OSSL_FUNC_KEYMGMT_IMPORTKEY, (void (*)(void))pkcs11_rsa_importkey },
+    { 0, NULL }
+};
+
+/* The table of functions this provider offers */
+static const OSSL_ALGORITHM pkcs11_keymgmt[] = {
+    { "RSA", "default=yes", pkcs11_rsa_keymgmt_functions },
+    { NULL, NULL, NULL }
+};
 
 static const OSSL_ALGORITHM *pkcs11_query(OSSL_PROVIDER *prov,
                                          int operation_id,
@@ -63,6 +81,8 @@ static const OSSL_ALGORITHM *pkcs11_query(OSSL_PROVIDER *prov,
 {
     *no_cache = 0;
     switch (operation_id) {
+    case OSSL_OP_KEYMGMT:
+        return pkcs11_keymgmt;
     }
     return NULL;
 }
@@ -116,9 +136,6 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
         }
     }
 
-    *out = pkcs11_dispatch_table;
-    *vprovctx = (void *)provider;
-
     if (c_get_params(provider, request)) {
         if (module_path == NULL || pin == NULL || keylabel == NULL) return 0;
     } else return 0;
@@ -128,8 +145,9 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
     pkcs11_ctx->pin = (CK_BYTE*) pin;
     pkcs11_ctx->label = (CK_BYTE*) keylabel;
 
-
     /* only for test */
+/*
+
     CK_SESSION_HANDLE session = 0;
     CK_OBJECT_HANDLE key = 0;
 
@@ -150,10 +168,9 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
         goto err;
 
     pkcs11_load_pkey(session, pkcs11_ctx, key);
+*/
+    *out = pkcs11_dispatch_table;
+    *vprovctx = pkcs11_ctx;
 
     return 1;
-
- err:
-    PKCS11_trace("pkcs11_engine_load_private_key failed\n");
-    return 0;
 }
