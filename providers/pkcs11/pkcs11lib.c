@@ -13,6 +13,42 @@
 #include <internal/nelem.h>
 #include <openssl/bn.h>
 
+static CK_RV pkcs11_load_functions(const char *library_path);
+static CK_FUNCTION_LIST *pkcs11_funcs;
+static int pkcs11_get_key(OSSL_STORE_LOADER_CTX *store_ctx,
+                          CK_OBJECT_HANDLE obj);
+static int pkcs11_get_cert(OSSL_STORE_LOADER_CTX *store_ctx,
+                           CK_OBJECT_HANDLE obj);
+static int RSA_encode_pkcs1(unsigned char **out, int *out_len, int type,
+                            const unsigned char *m, unsigned int m_len);
+static int pkcs11_parse_items(PKCS11_CTX *ctx, const char *uri);
+static int pkcs11_parse(PKCS11_CTX *ctx, const char *path, int store);
+static char pkcs11_hex_int(char nib1, char nib2);
+static int pkcs11_ishex(char *hex);
+static char* pkcs11_hex2a(char *hex);
+static void pkcs11_ctx_free(PKCS11_CTX *ctx);
+static int pkcs11_rsa_free(RSA *rsa);
+static RSA_METHOD *pkcs11_rsa = NULL;
+
+/* store stuff */
+static const char pkcs11_scheme[] = "pkcs11";
+static OSSL_STORE_LOADER_CTX* pkcs11_store_open(
+    const OSSL_STORE_LOADER *loader, const char *uri,
+    const UI_METHOD *ui_method, void *ui_data);
+static OSSL_STORE_INFO* pkcs11_store_load(OSSL_STORE_LOADER_CTX *ctx,
+                                          const UI_METHOD *ui_method,
+                                          void *ui_data);
+static int pkcs11_store_eof(OSSL_STORE_LOADER_CTX *ctx);
+static int pkcs11_store_close(OSSL_STORE_LOADER_CTX *ctx);
+static int pkcs11_store_error(OSSL_STORE_LOADER_CTX *ctx);
+static OSSL_STORE_LOADER_CTX* OSSL_STORE_LOADER_CTX_new(void);
+static void OSSL_STORE_LOADER_CTX_free(OSSL_STORE_LOADER_CTX* ctx);
+static OSSL_STORE_INFO* pkcs11_store_load_cert(OSSL_STORE_LOADER_CTX *ctx,
+                                               const UI_METHOD *ui_method,
+                                               void *ui_data);
+static OSSL_STORE_INFO* pkcs11_store_load_key(OSSL_STORE_LOADER_CTX *ctx,
+                                              const UI_METHOD *ui_method,
+                                              void *ui_data);
 int rsa_pkcs11_idx = -1;
 
 int pkcs11_rsa_sign(int alg, const unsigned char *md,
@@ -1221,17 +1257,6 @@ static OSSL_STORE_INFO* pkcs11_store_load_key(OSSL_STORE_LOADER_CTX *ctx,
                                                void *ui_data)
 {
     return OSSL_STORE_INFO_new_PKEY(ctx->key);
-}
-
-static PKCS11_CTX *pkcs11_ctx_new(void)
-{
-    PKCS11_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
-    if (ctx == NULL) {
-        PKCS11err(PKCS11_F_PKCS11_CTX_NEW, ERR_R_MALLOC_FAILURE);
-        return NULL;
-    }
-    ctx->lock = CRYPTO_THREAD_lock_new();
-    return ctx;
 }
 
 static int pkcs11_rsa_free(RSA *rsa)

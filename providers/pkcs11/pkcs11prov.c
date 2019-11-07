@@ -14,6 +14,10 @@
 #include <openssl/core_names.h>
 #include <openssl/params.h>
 #include <openssl/pem.h>
+#include "pkcs11_err.h"
+#include "pkcs11prov.h"
+
+static PKCS11_CTX *pkcs11_ctx_new(void);
 
 /* Functions provided by the core */
 static OSSL_core_get_params_fn *c_get_params = NULL;
@@ -80,11 +84,23 @@ static const OSSL_DISPATCH pkcs11_dispatch_table[] = {
     { 0, NULL }
 };
 
+static PKCS11_CTX *pkcs11_ctx_new(void)
+{
+    PKCS11_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
+    if (ctx == NULL) {
+//        PKCS11err(PKCS11_F_PKCS11_CTX_NEW, ERR_R_MALLOC_FAILURE);
+        return NULL;
+    }
+    ctx->lock = CRYPTO_THREAD_lock_new();
+    return ctx;
+}
+
 int OSSL_provider_init(const OSSL_PROVIDER *provider,
                        const OSSL_DISPATCH *in,
                        const OSSL_DISPATCH **out,
                        void **vprovctx)
 {
+    PKCS11_CTX *pkcs11_ctx = NULL;
     static char *module_path = NULL;
     static OSSL_PARAM request[] = {
         { "module_path", OSSL_PARAM_UTF8_PTR,
@@ -113,7 +129,11 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
         }
     }
 
-/* TODO store module_path in ctx */
+    if (pkcs11_initialize(module_path) != CKR_OK)
+        return 0;
+
+    pkcs11_ctx = pkcs11_ctx_new();
+    pkcs11_ctx->module_path = module_path;
 
     return 1;
 }
