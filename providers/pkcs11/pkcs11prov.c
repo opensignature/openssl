@@ -24,6 +24,8 @@ static OSSL_core_get_params_fn *c_get_params = NULL;
 
 static const OSSL_PARAM pkcs11_param_types[] = {
     { "module_path", OSSL_PARAM_UTF8_STRING, NULL, 0, 0 },
+    { "pin", OSSL_PARAM_UTF8_STRING, NULL, 0, 0 },
+    { "keylabel", OSSL_PARAM_UTF8_STRING, NULL, 0, 0 },
     { NULL, 0, NULL, 0, 0 }
 };
 static OSSL_provider_gettable_params_fn pkcs11_gettable_params;
@@ -36,34 +38,23 @@ static const OSSL_PARAM *pkcs11_gettable_params(void *_)
 
 static int pkcs11_get_params(void *vprov, OSSL_PARAM params[])
 {
-    const OSSL_PROVIDER *prov = vprov;
     OSSL_PARAM *p = params;
-    int ok = 1;
 
-    for (; ok && p->key != NULL; p++) {
-        if (strcmp(p->key, "module_path") == 0) {
-            static char *module_path;
-            static OSSL_PARAM request[] = {
-                { "module_path", OSSL_PARAM_UTF8_PTR,
-                  &module_path, sizeof(&module_path), 0 },
-                { NULL, 0, NULL, 0, 0 }
-            };
-            char buf[256];
-            size_t buf_l;
-            module_path = NULL;
-            if (c_get_params(prov, request)) {
-                if (module_path) {
-                    strcpy(buf, module_path);
-                }
-            }
-            p->return_size = buf_l = strlen(buf) + 1;
-            if (p->data_size >= buf_l)
-                strcpy(p->data, buf);
-            else
-                ok = 0;
-        }
-    }
-    return ok;
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_NAME);
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "OpenSSL Pkcs#11 Provider"))
+        return 0;
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_VERSION);
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, OPENSSL_VERSION_STR))
+        return 0;
+    p = OSSL_PARAM_locate(params, OSSL_PROV_PARAM_BUILDINFO);
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "module_path"))
+    p = OSSL_PARAM_locate(params, "module_path");
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "pin"))
+    p = OSSL_PARAM_locate(params, "pin");
+    if (p != NULL && !OSSL_PARAM_set_utf8_ptr(p, "keylabel"))
+    p = OSSL_PARAM_locate(params, "keylabel");
+
+    return 1;
 }
 
 static const OSSL_ALGORITHM *pkcs11_query(OSSL_PROVIDER *prov,
@@ -102,12 +93,17 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
 {
     PKCS11_CTX *pkcs11_ctx = NULL;
     static char *module_path = NULL;
+    static char *keylabel = NULL;
+    static char *pin = NULL;
     static OSSL_PARAM request[] = {
         { "module_path", OSSL_PARAM_UTF8_PTR,
           &module_path, sizeof(&module_path), 0 },
+        { "pin", OSSL_PARAM_UTF8_PTR,
+          &pin, sizeof(&pin), 0 },
+        { "keylabel", OSSL_PARAM_UTF8_PTR,
+          &keylabel, sizeof(&keylabel), 0 },
           { NULL, 0, NULL, 0, 0 }
         };
-    char buf[256];
 
     for (; in->function_id != 0; in++) {
         switch (in->function_id) {
@@ -124,16 +120,40 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
     *vprovctx = (void *)provider;
 
     if (c_get_params(provider, request)) {
-        if (module_path) {
-            strcpy(buf, module_path);
-        }
-    }
-
-    if (pkcs11_initialize(module_path) != CKR_OK)
-        return 0;
+        if (module_path == NULL || pin == NULL || keylabel == NULL) return 0;
+    } else return 0;
 
     pkcs11_ctx = pkcs11_ctx_new();
     pkcs11_ctx->module_path = module_path;
+    pkcs11_ctx->pin = (CK_BYTE*) pin;
+    pkcs11_ctx->label = (CK_BYTE*) keylabel;
+
+
+    /* only for test */
+    CK_SESSION_HANDLE session = 0;
+    CK_OBJECT_HANDLE key = 0;
+
+    pkcs11_initialize(module_path);
+
+    if (!pkcs11_get_slot(pkcs11_ctx))
+        goto err;
+
+    if (!pkcs11_start_session(pkcs11_ctx, &session))
+        goto err;
+
+    if (!pkcs11_login(session, pkcs11_ctx, CKU_USER))
+        goto err;
+
+    key = pkcs11_find_private_key(session, pkcs11_ctx);
+
+    if (!key)
+        goto err;
+
+    pkcs11_load_pkey(session, pkcs11_ctx, key);
 
     return 1;
+
+ err:
+    PKCS11_trace("pkcs11_engine_load_private_key failed\n");
+    return 0;
 }

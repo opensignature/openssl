@@ -316,6 +316,7 @@ int pkcs11_get_slot(PKCS11_CTX *ctx)
     }
 
     if (slotCount == 0) {
+        PKCS11_trace("C_GetSlotList failed, slotCount = 0\n");
         PKCS11err(PKCS11_F_PKCS11_GET_SLOT, PKCS11_R_SLOT_NOT_FOUND);
         goto err;
     }
@@ -430,10 +431,12 @@ CK_OBJECT_HANDLE pkcs11_find_private_key(CK_SESSION_HANDLE session,
         tmpl[2].type = CKA_ID;
         tmpl[2].pValue = ctx->id;
         tmpl[2].ulValueLen = (CK_ULONG)strlen((char *)ctx->id);
-    } else {
+    } else if (ctx->label != NULL) {
         tmpl[2].type = CKA_LABEL;
         tmpl[2].pValue = ctx->label;
         tmpl[2].ulValueLen = (CK_ULONG)strlen((char *)ctx->label);
+    } else {
+        PKCS11_trace("id and label empty\n");
     }
 
     rv = pkcs11_funcs->C_FindObjectsInit(session, tmpl, OSSL_NELEM(tmpl));
