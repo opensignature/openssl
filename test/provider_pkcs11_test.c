@@ -9,6 +9,7 @@
 
 #include <stddef.h>
 #include <openssl/provider.h>
+#include "crypto/evp.h"
 #include "testutil.h"
 #include "internal/provider.h"
 
@@ -22,6 +23,8 @@ static int test_provider(OSSL_PROVIDER *prov)
 {
     const char *module_path = NULL;
     int ret = 0;
+    EVP_KEYMGMT *km = NULL;
+    OPENSSL_CTX *ctx;
 
     ret =
         TEST_true(ossl_provider_activate(prov))
@@ -30,6 +33,13 @@ static int test_provider(OSSL_PROVIDER *prov)
         && TEST_size_t_gt(request[0].data_size, 0);
 
     TEST_info("Module path: %s\n", module_path);
+
+    ctx = ossl_provider_library_context(prov);
+    km = EVP_KEYMGMT_fetch(ctx, "RSA", NULL);
+    if (evp_keymgmt_importkey(km, request) == NULL)
+       TEST_info("Importkey not OK\n");
+    else
+       TEST_info("Importkey OK\n", module_path);
 
     ossl_provider_free(prov);
     return ret;

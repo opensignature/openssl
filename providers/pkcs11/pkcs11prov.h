@@ -67,8 +67,8 @@ CK_RV pkcs11_initialize(const char *library_path);
 int pkcs11_start_session(PKCS11_CTX *ctx, CK_SESSION_HANDLE *session);
 int pkcs11_login(CK_SESSION_HANDLE session, PKCS11_CTX *ctx,
                  CK_USER_TYPE userType);
-EVP_PKEY *pkcs11_load_pkey(CK_SESSION_HANDLE session, PKCS11_CTX *ctx,
-                           CK_OBJECT_HANDLE key);
+RSA *pkcs11_load_pkey(CK_SESSION_HANDLE session, PKCS11_CTX *ctx,
+                      CK_OBJECT_HANDLE key);
 int pkcs11_rsa_sign(int alg, const unsigned char *md,
                     unsigned int md_len, unsigned char *sigret,
                     unsigned int *siglen, const RSA *rsa);

@@ -36,8 +36,6 @@ static const OSSL_PARAM pkcs11_param_types[] = {
 static OSSL_provider_gettable_params_fn pkcs11_gettable_params;
 static OSSL_provider_get_params_fn pkcs11_get_params;
 
-static int pkcs11_params_to_key(RSA *rsa, const OSSL_PARAM params[]);
-
 static const OSSL_PARAM *pkcs11_gettable_params(void *_)
 {
     return pkcs11_param_types;
@@ -46,13 +44,37 @@ static const OSSL_PARAM *pkcs11_gettable_params(void *_)
 static void *pkcs11_rsa_importkey(void *provctx, const OSSL_PARAM params[])
 {
     RSA *rsa;
+    CK_SESSION_HANDLE session = 0;
+    CK_OBJECT_HANDLE key = 0;
 
     if ((rsa = RSA_new()) == NULL) {
         RSA_free(rsa);
-        rsa = NULL;
+        return NULL;
     }
-/* TODO */
-    return rsa;
+
+    PKCS11_CTX *pkcs11_ctx = provctx;
+
+    pkcs11_initialize(pkcs11_ctx->module_path);
+
+    if (!pkcs11_get_slot(pkcs11_ctx))
+        goto err;
+
+    if (!pkcs11_start_session(pkcs11_ctx, &session))
+        goto err;
+
+    if (!pkcs11_login(session, pkcs11_ctx, CKU_USER))
+        goto err;
+
+    key = pkcs11_find_private_key(session, pkcs11_ctx);
+
+    if (!key)
+        goto err;
+
+    return pkcs11_load_pkey(session, pkcs11_ctx, key);
+
+ err:
+    return NULL;
+
 }
 
 static int pkcs11_get_params(void *vprov, OSSL_PARAM params[])
@@ -145,30 +167,6 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
     pkcs11_ctx->pin = (CK_BYTE*) pin;
     pkcs11_ctx->label = (CK_BYTE*) keylabel;
 
-    /* only for test */
-/*
-
-    CK_SESSION_HANDLE session = 0;
-    CK_OBJECT_HANDLE key = 0;
-
-    pkcs11_initialize(module_path);
-
-    if (!pkcs11_get_slot(pkcs11_ctx))
-        goto err;
-
-    if (!pkcs11_start_session(pkcs11_ctx, &session))
-        goto err;
-
-    if (!pkcs11_login(session, pkcs11_ctx, CKU_USER))
-        goto err;
-
-    key = pkcs11_find_private_key(session, pkcs11_ctx);
-
-    if (!key)
-        goto err;
-
-    pkcs11_load_pkey(session, pkcs11_ctx, key);
-*/
     *out = pkcs11_dispatch_table;
     *vprovctx = pkcs11_ctx;
 
