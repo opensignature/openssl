@@ -16,13 +16,29 @@
 #include <openssl/pem.h>
 #include "pkcs11_err.h"
 #include "pkcs11prov.h"
+#include "prov/provider_ctx.h"
 
 static OSSL_OP_keymgmt_importkey_fn pkcs11_rsa_importkey;
+static OSSL_OP_signature_newctx_fn rsa_newctx;
+static OSSL_OP_signature_sign_init_fn rsa_signature_init;
+static OSSL_OP_signature_sign_fn rsa_sign;
+static OSSL_OP_signature_freectx_fn rsa_freectx;
+static OSSL_OP_signature_dupctx_fn rsa_dupctx;
 
 DEFINE_STACK_OF(BIGNUM)
 DEFINE_SPECIAL_STACK_OF_CONST(BIGNUM_const, BIGNUM)
 
 static PKCS11_CTX *pkcs11_ctx_new(void);
+
+typedef struct {
+    OPENSSL_CTX *libctx;
+    RSA *rsa;
+    size_t mdsize;
+    /* Should be big enough */
+    char mdname[80];
+    EVP_MD *md;
+    EVP_MD_CTX *mdctx;
+} PROV_RSA_CTX;
 
 /* Functions provided by the core */
 static OSSL_core_get_params_fn *c_get_params = NULL;
@@ -91,9 +107,27 @@ const OSSL_DISPATCH pkcs11_rsa_keymgmt_functions[] = {
     { 0, NULL }
 };
 
+const OSSL_DISPATCH rsa_signature_functions[] = {
+    { OSSL_FUNC_SIGNATURE_NEWCTX, (void (*)(void))rsa_newctx },
+    { OSSL_FUNC_SIGNATURE_SIGN_INIT, (void (*)(void))rsa_signature_init },
+    { OSSL_FUNC_SIGNATURE_SIGN, (void (*)(void))rsa_sign },
+    { OSSL_FUNC_SIGNATURE_FREECTX, (void (*)(void))rsa_freectx },
+    { OSSL_FUNC_SIGNATURE_DUPCTX, (void (*)(void))rsa_dupctx },
+    { 0, NULL }
+};
+
+static const OSSL_ALGORITHM pkcs11_signature[] = {
+#ifndef OPENSSL_NO_RSA
+    { "RSA", "default=yes", rsa_signature_functions },
+#endif
+    { NULL, NULL, NULL }
+};
+
 /* The table of functions this provider offers */
 static const OSSL_ALGORITHM pkcs11_keymgmt[] = {
+#ifndef OPENSSL_NO_RSA
     { "RSA", "default=yes", pkcs11_rsa_keymgmt_functions },
+#endif
     { NULL, NULL, NULL }
 };
 
@@ -105,6 +139,8 @@ static const OSSL_ALGORITHM *pkcs11_query(OSSL_PROVIDER *prov,
     switch (operation_id) {
     case OSSL_OP_KEYMGMT:
         return pkcs11_keymgmt;
+    case OSSL_OP_SIGNATURE:
+        return pkcs11_signature;
     }
     return NULL;
 }
@@ -172,3 +208,100 @@ int OSSL_provider_init(const OSSL_PROVIDER *provider,
 
     return 1;
 }
+
+static void *rsa_newctx(void *provctx)
+{
+    PROV_RSA_CTX *prsactx = OPENSSL_zalloc(sizeof(PROV_RSA_CTX));
+
+    if (prsactx == NULL)
+        return NULL;
+
+    prsactx->libctx = PROV_LIBRARY_CONTEXT_OF(provctx);
+    return prsactx;
+}
+
+static int rsa_signature_init(void *vrsactx, void *vrsa)
+{
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vrsactx;
+
+    if (prsactx == NULL || vrsa == NULL || !RSA_up_ref(vrsa))
+        return 0;
+    RSA_free(prsactx->rsa);
+    prsactx->rsa = vrsa;
+    return 1;
+}
+
+static int rsa_sign(void *vprsactx, unsigned char *sig, size_t *siglen,
+                    size_t sigsize, const unsigned char *tbs, size_t tbslen)
+{
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;
+    int ret;
+    unsigned int sltmp;
+    size_t rsasize = RSA_size(prsactx->rsa);
+
+    if (sig == NULL) {
+        *siglen = rsasize;
+        return 1;
+    }
+
+    if (sigsize < (size_t)rsasize)
+        return 0;
+
+    if (prsactx->mdsize != 0 && tbslen != prsactx->mdsize)
+        return 0;
+
+    ret = RSA_sign(0, tbs, tbslen, sig, &sltmp, prsactx->rsa);
+
+    if (ret <= 0)
+        return 0;
+
+    *siglen = sltmp;
+    return 1;
+}
+
+static void rsa_freectx(void *vprsactx)
+{
+    PROV_RSA_CTX *prsactx = (PROV_RSA_CTX *)vprsactx;
+
+    RSA_free(prsactx->rsa);
+    EVP_MD_CTX_free(prsactx->mdctx);
+    EVP_MD_free(prsactx->md);
+
+    OPENSSL_free(prsactx);
+}
+
+static void *rsa_dupctx(void *vprsactx)
+{
+    PROV_RSA_CTX *srcctx = (PROV_RSA_CTX *)vprsactx;
+    PROV_RSA_CTX *dstctx;
+
+    dstctx = OPENSSL_zalloc(sizeof(*srcctx));
+    if (dstctx == NULL)
+        return NULL;
+
+    *dstctx = *srcctx;
+    dstctx->rsa = NULL;
+    dstctx->md = NULL;
+    dstctx->mdctx = NULL;
+
+    if (srcctx->rsa != NULL && !RSA_up_ref(srcctx->rsa))
+        goto err;
+    dstctx->rsa = srcctx->rsa;
+
+    if (srcctx->md != NULL && !EVP_MD_up_ref(srcctx->md))
+        goto err;
+    dstctx->md = srcctx->md;
+
+    if (srcctx->mdctx != NULL) {
+        dstctx->mdctx = EVP_MD_CTX_new();
+        if (dstctx->mdctx == NULL
+                || !EVP_MD_CTX_copy_ex(dstctx->mdctx, srcctx->mdctx))
+            goto err;
+    }
+
+    return dstctx;
+ err:
+    rsa_freectx(dstctx);
+    return NULL;
+}
+
