@@ -9,6 +9,8 @@
 
 #include <stddef.h>
 #include <openssl/provider.h>
+#include <openssl/bio.h>
+#include <openssl/pem.h>
 #include "crypto/evp.h"
 #include "testutil.h"
 #include "internal/provider.h"
@@ -25,6 +27,8 @@ static int test_provider(OSSL_PROVIDER *prov)
     int ret = 0;
     EVP_KEYMGMT *km = NULL;
     OPENSSL_CTX *ctx;
+    EVP_PKEY *k = NULL;
+    RSA *rsa = NULL;
 
     ret =
         TEST_true(ossl_provider_activate(prov))
@@ -36,10 +40,13 @@ static int test_provider(OSSL_PROVIDER *prov)
 
     ctx = ossl_provider_library_context(prov);
     km = EVP_KEYMGMT_fetch(ctx, "RSA", NULL);
-    if (evp_keymgmt_importkey(km, request) == NULL)
-       TEST_info("Importkey not OK\n");
-    else
-       TEST_info("Importkey OK\n", module_path);
+
+    TEST_ptr(rsa = evp_keymgmt_importkey(km, request));
+    TEST_ptr(k = EVP_PKEY_new());
+    TEST_size_t_gt(EVP_PKEY_assign_RSA(k, rsa), 0);
+
+    BIO *out = BIO_new_fp(stdout, BIO_NOCLOSE);
+    PEM_write_bio_PUBKEY(out, k);
 
     ossl_provider_free(prov);
     return ret;
