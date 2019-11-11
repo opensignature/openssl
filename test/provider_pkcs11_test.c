@@ -29,6 +29,19 @@ static int test_provider(OSSL_PROVIDER *prov)
     OPENSSL_CTX *ctx;
     EVP_PKEY *k = NULL;
     RSA *rsa = NULL;
+    EVP_PKEY_CTX *kctx = NULL;
+    EVP_SIGNATURE *rsaimpl = NULL;
+    int len = 32;
+    size_t sigLength;
+    unsigned char *sig = NULL;
+
+    sig = OPENSSL_malloc(256);
+
+    const unsigned char mdToSign[] = {
+      0x27, 0x51, 0x8b, 0xa9, 0x68, 0x30, 0x11, 0xf6, 0xb3, 0x96, 0x07, 0x2c,
+      0x05, 0xf6, 0x65, 0x6d, 0x04, 0xf5, 0xfb, 0xc3, 0x78, 0x7c, 0xf9, 0x24,
+      0x90, 0xec, 0x60, 0x6e, 0x50, 0x92, 0xe3, 0x26
+    };
 
     ret =
         TEST_true(ossl_provider_activate(prov))
@@ -48,8 +61,26 @@ static int test_provider(OSSL_PROVIDER *prov)
     BIO *out = BIO_new_fp(stdout, BIO_NOCLOSE);
     PEM_write_bio_PUBKEY(out, k);
 
+    kctx = EVP_PKEY_CTX_new(k, NULL);
+    rsaimpl = EVP_SIGNATURE_fetch(ctx, "RSA", NULL);
+
+    if (!TEST_ptr(kctx)
+        || !TEST_ptr(rsaimpl)
+        || !TEST_int_gt(EVP_PKEY_sign_init_ex(kctx, rsaimpl), 0))
+        goto err;
+
+    if (!TEST_int_eq(EVP_PKEY_sign(kctx, sig, &sigLength, mdToSign, len),1))
+        goto err;
+
+      BIO *out2 = BIO_new_fp(stdout, BIO_NOCLOSE);
+      BIO_dump(out2, (char *)sig, sigLength);
+
     ossl_provider_free(prov);
     return ret;
+
+ err:
+    ossl_provider_free(prov);
+    return 0;
 }
 
 #ifndef NO_PROVIDER_MODULE

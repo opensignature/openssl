@@ -23,7 +23,6 @@ static OSSL_OP_signature_newctx_fn rsa_newctx;
 static OSSL_OP_signature_sign_init_fn rsa_signature_init;
 static OSSL_OP_signature_sign_fn rsa_sign;
 static OSSL_OP_signature_freectx_fn rsa_freectx;
-static OSSL_OP_signature_dupctx_fn rsa_dupctx;
 
 DEFINE_STACK_OF(BIGNUM)
 DEFINE_SPECIAL_STACK_OF_CONST(BIGNUM_const, BIGNUM)
@@ -112,7 +111,6 @@ const OSSL_DISPATCH rsa_signature_functions[] = {
     { OSSL_FUNC_SIGNATURE_SIGN_INIT, (void (*)(void))rsa_signature_init },
     { OSSL_FUNC_SIGNATURE_SIGN, (void (*)(void))rsa_sign },
     { OSSL_FUNC_SIGNATURE_FREECTX, (void (*)(void))rsa_freectx },
-    { OSSL_FUNC_SIGNATURE_DUPCTX, (void (*)(void))rsa_dupctx },
     { 0, NULL }
 };
 
@@ -155,9 +153,8 @@ static const OSSL_DISPATCH pkcs11_dispatch_table[] = {
 
 static PKCS11_CTX *pkcs11_ctx_new(void)
 {
-    PKCS11_CTX *ctx = OPENSSL_zalloc(sizeof(*ctx));
+    PKCS11_CTX *ctx = OPENSSL_zalloc(sizeof(PKCS11_CTX));
     if (ctx == NULL) {
-//        PKCS11err(PKCS11_F_PKCS11_CTX_NEW, ERR_R_MALLOC_FAILURE);
         return NULL;
     }
     ctx->lock = CRYPTO_THREAD_lock_new();
@@ -238,11 +235,7 @@ static int rsa_sign(void *vprsactx, unsigned char *sig, size_t *siglen,
     int ret;
     unsigned int sltmp;
     size_t rsasize = RSA_size(prsactx->rsa);
-
-    if (sig == NULL) {
-        *siglen = rsasize;
-        return 1;
-    }
+    PKCS11_CTX *pkcs11_ctx = (PKCS11_CTX *) prsactx->libctx;
 
     if (sigsize < (size_t)rsasize)
         return 0;
@@ -250,7 +243,8 @@ static int rsa_sign(void *vprsactx, unsigned char *sig, size_t *siglen,
     if (prsactx->mdsize != 0 && tbslen != prsactx->mdsize)
         return 0;
 
-    ret = RSA_sign(0, tbs, tbslen, sig, &sltmp, prsactx->rsa);
+    ret = pkcs11_rsa_sign(RSA_PKCS1_PADDING, tbs, tbslen, sig, &sltmp,
+                          prsactx->rsa, pkcs11_ctx);
 
     if (ret <= 0)
         return 0;
@@ -269,39 +263,3 @@ static void rsa_freectx(void *vprsactx)
 
     OPENSSL_free(prsactx);
 }
-
-static void *rsa_dupctx(void *vprsactx)
-{
-    PROV_RSA_CTX *srcctx = (PROV_RSA_CTX *)vprsactx;
-    PROV_RSA_CTX *dstctx;
-
-    dstctx = OPENSSL_zalloc(sizeof(*srcctx));
-    if (dstctx == NULL)
-        return NULL;
-
-    *dstctx = *srcctx;
-    dstctx->rsa = NULL;
-    dstctx->md = NULL;
-    dstctx->mdctx = NULL;
-
-    if (srcctx->rsa != NULL && !RSA_up_ref(srcctx->rsa))
-        goto err;
-    dstctx->rsa = srcctx->rsa;
-
-    if (srcctx->md != NULL && !EVP_MD_up_ref(srcctx->md))
-        goto err;
-    dstctx->md = srcctx->md;
-
-    if (srcctx->mdctx != NULL) {
-        dstctx->mdctx = EVP_MD_CTX_new();
-        if (dstctx->mdctx == NULL
-                || !EVP_MD_CTX_copy_ex(dstctx->mdctx, srcctx->mdctx))
-            goto err;
-    }
-
-    return dstctx;
- err:
-    rsa_freectx(dstctx);
-    return NULL;
-}
-
