@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2018 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2006-2020 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -36,8 +36,6 @@ extern "C" {
 
 # include <openssl/x509.h>
 # include <openssl/x509v3.h>
-
-DEFINE_OR_DECLARE_STACK_OF(EVP_MD)
 
 typedef struct TS_msg_imprint_st TS_MSG_IMPRINT;
 typedef struct TS_req_st TS_REQ;

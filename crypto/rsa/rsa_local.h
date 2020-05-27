@@ -12,6 +12,7 @@
 
 #include <openssl/rsa.h>
 #include "internal/refcount.h"
+#include "crypto/rsa.h"
 
 #define RSA_MAX_PRIME_NUM       5
 #define RSA_MIN_MODULUS_BITS    512
@@ -50,9 +51,19 @@ struct rsa_st {
     BIGNUM *dmp1;
     BIGNUM *dmq1;
     BIGNUM *iqmp;
-    /* If a PSS only key this contains the parameter restrictions */
+
+    /*
+     * If a PSS only key this contains the parameter restrictions.
+     * There are two structures for the same thing, used in different cases.
+     */
+    /* This is used uniquely by OpenSSL provider implementations. */
+    RSA_PSS_PARAMS_30 pss_params;
+#ifndef FIPS_MODULE
+    /* This is used uniquely by rsa_ameth.c and rsa_pmeth.c. */
     RSA_PSS_PARAMS *pss;
-#ifndef FIPS_MODE
+#endif
+
+#ifndef FIPS_MODULE
     /* for multi-prime RSA, defined in RFC 8017 */
     STACK_OF(RSA_PRIME_INFO) *prime_infos;
     /* Be careful using this if the RSA structure is shared */
@@ -176,12 +187,5 @@ int rsa_padding_add_PKCS1_type_2_with_libctx(OPENSSL_CTX *libctx,
                                              unsigned char *to, int tlen,
                                              const unsigned char *from,
                                              int flen);
-int rsa_padding_add_PKCS1_OAEP_mgf1_with_libctx(OPENSSL_CTX *libctx,
-                                                unsigned char *to, int tlen,
-                                                const unsigned char *from,
-                                                int flen,
-                                                const unsigned char *param,
-                                                int plen, const EVP_MD *md,
-                                                const EVP_MD *mgf1md);
 
 #endif /* OSSL_CRYPTO_RSA_LOCAL_H */

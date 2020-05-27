@@ -178,13 +178,13 @@ static const TLS_GROUP_INFO nid_list[] = {
     {EVP_PKEY_X448, "X448", 224, TLS_GROUP_CURVE_CUSTOM, 0x001E}, /* X448 (30) */
 # endif /* OPENSSL_NO_EC */
 # ifndef OPENSSL_NO_GOST
-    {NID_id_tc26_gost_3410_2012_256_paramSetA, "GOST_2012_256", 112, TLS_GROUP_CURVE_PRIME, 0x0022}, /* GC256A (34) */
-    {NID_id_tc26_gost_3410_2012_256_paramSetB, "GOST_2012_256", 112, TLS_GROUP_CURVE_PRIME, 0x0023}, /* GC256B (35) */
-    {NID_id_tc26_gost_3410_2012_256_paramSetC, "GOST_2012_256", 112, TLS_GROUP_CURVE_PRIME, 0x0024}, /* GC256C (36) */
-    {NID_id_tc26_gost_3410_2012_256_paramSetD, "GOST_2012_256", 112, TLS_GROUP_CURVE_PRIME, 0x0025}, /* GC256D (37) */
-    {NID_id_tc26_gost_3410_2012_512_paramSetA, "GOST_2012_512", 112, TLS_GROUP_CURVE_PRIME, 0x0026}, /* GC512A (38) */
-    {NID_id_tc26_gost_3410_2012_512_paramSetB, "GOST_2012_512", 112, TLS_GROUP_CURVE_PRIME, 0x0027}, /* GC512B (39) */
-    {NID_id_tc26_gost_3410_2012_512_paramSetC, "GOST_2012_512", 112, TLS_GROUP_CURVE_PRIME, 0x0028}, /* GC512C (40) */
+    {NID_id_tc26_gost_3410_2012_256_paramSetA, "GOST_2012_256", 128, TLS_GROUP_CURVE_PRIME, 0x0022}, /* GC256A (34) */
+    {NID_id_tc26_gost_3410_2012_256_paramSetB, "GOST_2012_256", 128, TLS_GROUP_CURVE_PRIME, 0x0023}, /* GC256B (35) */
+    {NID_id_tc26_gost_3410_2012_256_paramSetC, "GOST_2012_256", 128, TLS_GROUP_CURVE_PRIME, 0x0024}, /* GC256C (36) */
+    {NID_id_tc26_gost_3410_2012_256_paramSetD, "GOST_2012_256", 128, TLS_GROUP_CURVE_PRIME, 0x0025}, /* GC256D (37) */
+    {NID_id_tc26_gost_3410_2012_512_paramSetA, "GOST_2012_512", 256, TLS_GROUP_CURVE_PRIME, 0x0026}, /* GC512A (38) */
+    {NID_id_tc26_gost_3410_2012_512_paramSetB, "GOST_2012_512", 256, TLS_GROUP_CURVE_PRIME, 0x0027}, /* GC512B (39) */
+    {NID_id_tc26_gost_3410_2012_512_paramSetC, "GOST_2012_512", 256, TLS_GROUP_CURVE_PRIME, 0x0028}, /* GC512C (40) */
 # endif /* OPENSSL_NO_GOST */
 # ifndef OPENSSL_NO_DH
     /* Security bit values for FFDHE groups are updated as per RFC 7919 */
@@ -1001,6 +1001,21 @@ static const SIGALG_LOOKUP *tls1_get_legacy_sigalg(const SSL *s, int idx)
                     }
                 }
             }
+            /*
+             * As both SSL_PKEY_GOST12_512 and SSL_PKEY_GOST12_256 indices can be used
+             * with new (aGOST12-only) ciphersuites, we should find out which one is available really.
+             */
+            else if (idx == SSL_PKEY_GOST12_256) {
+                int real_idx;
+
+                for (real_idx = SSL_PKEY_GOST12_512; real_idx >= SSL_PKEY_GOST12_256;
+                     real_idx--) {
+                     if (s->cert->pkeys[real_idx].privatekey != NULL) {
+                         idx = real_idx;
+                         break;
+                     }
+                }
+            }
         } else {
             idx = s->cert->key - s->cert->pkeys;
         }
@@ -1794,7 +1809,7 @@ static int tls12_sigalg_allowed(const SSL *s, int op, const SIGALG_LOOKUP *lu)
                 if (ssl_cipher_disabled(s, c, SSL_SECOP_CIPHER_SUPPORTED, 0))
                     continue;
 
-                if ((c->algorithm_mkey & SSL_kGOST) != 0)
+                if ((c->algorithm_mkey & (SSL_kGOST | SSL_kGOST18)) != 0)
                     break;
             }
             if (i == num)

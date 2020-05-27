@@ -1,5 +1,5 @@
 #! /usr/bin/env perl
-# Copyright 2015-2018 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2015-2020 The OpenSSL Project Authors. All Rights Reserved.
 #
 # Licensed under the Apache License 2.0 (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
@@ -27,7 +27,11 @@ my $bldtop = $ENV{BLDTOP} || $ENV{TOP};
 my $recipesdir = catdir($srctop, "test", "recipes");
 my $libdir = rel2abs(catdir($srctop, "util", "perl"));
 
-$ENV{OPENSSL_CONF} = catdir($srctop, "apps", "openssl.cnf");
+$ENV{OPENSSL_CONF} = rel2abs(catdir($srctop, "apps", "openssl.cnf"));
+$ENV{OPENSSL_CONF_INCLUDE} = rel2abs(catdir($bldtop, "providers"));
+$ENV{OPENSSL_MODULES} = rel2abs(catdir($bldtop, "providers"));
+$ENV{OPENSSL_ENGINES} = rel2abs(catdir($bldtop, "engines"));
+$ENV{CTLOG_FILE} = rel2abs(catdir($srctop, "test", "ct", "log_list.cnf"));
 
 my %tapargs =
     ( verbosity         => $ENV{HARNESS_VERBOSE} ? 1 : 0,

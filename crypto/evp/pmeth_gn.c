@@ -20,7 +20,7 @@
 #include "crypto/evp.h"
 #include "evp_local.h"
 
-#if !defined(FIPS_MODE) && !defined(OPENSSL_NO_EC)
+#if !defined(FIPS_MODULE) && !defined(OPENSSL_NO_EC)
 # define TMP_SM2_HACK
 #endif
 
@@ -69,7 +69,7 @@ static int gen_init(EVP_PKEY_CTX *ctx, int operation)
     goto end;
 
  legacy:
-#ifdef FIPS_MODE
+#ifdef FIPS_MODULE
     goto not_supported;
 #else
     if (ctx->pmeth == NULL
@@ -93,8 +93,10 @@ static int gen_init(EVP_PKEY_CTX *ctx, int operation)
 #endif
 
  end:
-    if (ret <= 0)
+    if (ret <= 0 && ctx != NULL) {
+        evp_pkey_ctx_free_old_ops(ctx);
         ctx->operation = EVP_PKEY_OP_UNDEFINED;
+    }
     return ret;
 
  not_supported:
@@ -189,7 +191,7 @@ int EVP_PKEY_gen(EVP_PKEY_CTX *ctx, EVP_PKEY **ppkey)
                                  ossl_callback_to_pkey_gencb, ctx)
             != NULL);
 
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
     /* In case |*ppkey| was originally a legacy key */
     if (ret)
         evp_pkey_free_legacy(*ppkey);
@@ -210,8 +212,9 @@ int EVP_PKEY_gen(EVP_PKEY_CTX *ctx, EVP_PKEY **ppkey)
     {
         char curve_name[OSSL_MAX_NAME_SIZE] = "";
 
-        if (EVP_PKEY_CTX_get_ec_paramgen_curve_name(ctx, curve_name,
-                                                    sizeof(curve_name)) < 1
+        if (!EVP_PKEY_get_utf8_string_param(*ppkey, OSSL_PKEY_PARAM_EC_NAME,
+                                            curve_name, sizeof(curve_name),
+                                            NULL)
             || strcmp(curve_name, "SM2") != 0)
             goto end;
     }
@@ -223,7 +226,7 @@ int EVP_PKEY_gen(EVP_PKEY_CTX *ctx, EVP_PKEY **ppkey)
     goto end;
 
  legacy:
-#ifdef FIPS_MODE
+#ifdef FIPS_MODULE
     goto not_supported;
 #else
     if (ctx->pkey && !evp_pkey_downgrade(ctx->pkey))
@@ -256,7 +259,7 @@ int EVP_PKEY_gen(EVP_PKEY_CTX *ctx, EVP_PKEY **ppkey)
     ERR_raise(ERR_LIB_EVP, EVP_R_OPERATON_NOT_INITIALIZED);
     ret = -1;
     goto end;
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
  not_accessible:
     ERR_raise(ERR_LIB_EVP, EVP_R_INACCESSIBLE_DOMAIN_PARAMETERS);
     ret = -1;
@@ -319,7 +322,7 @@ int EVP_PKEY_CTX_get_keygen_info(EVP_PKEY_CTX *ctx, int idx)
     return ctx->keygen_info[idx];
 }
 
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
 
 EVP_PKEY *EVP_PKEY_new_mac_key(int type, ENGINE *e,
                                const unsigned char *key, int keylen)
@@ -340,9 +343,9 @@ EVP_PKEY *EVP_PKEY_new_mac_key(int type, ENGINE *e,
     return mac_key;
 }
 
-#endif /* FIPS_MODE */
+#endif /* FIPS_MODULE */
 
-/*- All methods below can also be used in FIPS_MODE */
+/*- All methods below can also be used in FIPS_MODULE */
 
 static int fromdata_init(EVP_PKEY_CTX *ctx, int operation)
 {

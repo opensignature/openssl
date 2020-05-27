@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2016 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1999-2020 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -46,13 +46,13 @@ extern "C" {
 # define KEY_EX  0x10
 # define KEY_SIG 0x80
 
-DEFINE_OR_DECLARE_STACK_OF(PKCS12_SAFEBAG)
-
 typedef struct PKCS12_MAC_DATA_st PKCS12_MAC_DATA;
 
 typedef struct PKCS12_st PKCS12;
 
 typedef struct PKCS12_SAFEBAG_st PKCS12_SAFEBAG;
+
+DEFINE_OR_DECLARE_STACK_OF(PKCS12_SAFEBAG)
 
 typedef struct pkcs12_bag_st PKCS12_BAGS;
 

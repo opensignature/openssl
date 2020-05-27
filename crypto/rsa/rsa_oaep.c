@@ -67,13 +67,14 @@ int rsa_padding_add_PKCS1_OAEP_mgf1_with_libctx(OPENSSL_CTX *libctx,
     unsigned char seedmask[EVP_MAX_MD_SIZE];
     int mdlen, dbmask_len = 0;
 
-#ifndef FIPS_MODE
-    if (md == NULL)
+    if (md == NULL) {
+#ifndef FIPS_MODULE
         md = EVP_sha1();
 #else
         RSAerr(0, ERR_R_PASSED_NULL_PARAMETER);
         return 0;
 #endif
+    }
     if (mgf1md == NULL)
         mgf1md = md;
 
@@ -171,7 +172,7 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     int mdlen;
 
     if (md == NULL) {
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
         md = EVP_sha1();
 #else
         RSAerr(0, ERR_R_PASSED_NULL_PARAMETER);
@@ -302,7 +303,7 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
         to[i] = constant_time_select_8(mask, db[i + mdlen + 1], to[i]);
     }
 
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
     /*
      * To avoid chosen ciphertext attacks, the error message should not
      * reveal which kind of decoding error happened.

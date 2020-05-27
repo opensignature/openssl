@@ -16,7 +16,7 @@
 #include "internal/provider.h"
 #include "evp_local.h"
 
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
 
 static int update(EVP_MD_CTX *ctx, const void *data, size_t datalen)
 {
@@ -70,6 +70,9 @@ static int do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
 
     locpctx = ctx->pctx;
     evp_pkey_ctx_free_old_ops(locpctx);
+
+    if (props == NULL)
+        props = locpctx->propquery;
 
     /*
      * TODO when we stop falling back to legacy, this and the ERR_pop_to_mark()
@@ -142,7 +145,7 @@ static int do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
     locpctx->operation = ver ? EVP_PKEY_OP_VERIFYCTX
                              : EVP_PKEY_OP_SIGNCTX;
     locpctx->op.sig.sigprovctx
-        = signature->newctx(ossl_provider_ctx(signature->prov));
+        = signature->newctx(ossl_provider_ctx(signature->prov), props);
     if (locpctx->op.sig.sigprovctx == NULL) {
         ERR_raise(ERR_LIB_EVP,  EVP_R_INITIALIZATION_ERROR);
         goto err;
@@ -182,14 +185,14 @@ static int do_sigver_init(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
             goto err;
         }
         ret = signature->digest_verify_init(locpctx->op.sig.sigprovctx,
-                                            mdname, props, provkey);
+                                            mdname, provkey);
     } else {
         if (signature->digest_sign_init == NULL) {
             ERR_raise(ERR_LIB_EVP, EVP_R_INITIALIZATION_ERROR);
             goto err;
         }
         ret = signature->digest_sign_init(locpctx->op.sig.sigprovctx,
-                                          mdname, props, provkey);
+                                          mdname, provkey);
     }
 
     return ret ? 1 : 0;
@@ -317,11 +320,13 @@ int EVP_DigestSignUpdate(EVP_MD_CTX *ctx, const void *data, size_t dsize)
                                                       data, dsize);
 
  legacy:
-    /* do_sigver_init() checked that |digest_custom| is non-NULL */
-    if (pctx->flag_call_digest_custom
-        && !ctx->pctx->pmeth->digest_custom(ctx->pctx, ctx))
-        return 0;
-    pctx->flag_call_digest_custom = 0;
+    if (pctx != NULL) {
+        /* do_sigver_init() checked that |digest_custom| is non-NULL */
+        if (pctx->flag_call_digest_custom
+            && !ctx->pctx->pmeth->digest_custom(ctx->pctx, ctx))
+            return 0;
+        pctx->flag_call_digest_custom = 0;
+    }
 
     return EVP_DigestUpdate(ctx, data, dsize);
 }
@@ -345,16 +350,18 @@ int EVP_DigestVerifyUpdate(EVP_MD_CTX *ctx, const void *data, size_t dsize)
                                                         data, dsize);
 
  legacy:
-    /* do_sigver_init() checked that |digest_custom| is non-NULL */
-    if (pctx->flag_call_digest_custom
-        && !ctx->pctx->pmeth->digest_custom(ctx->pctx, ctx))
-        return 0;
-    pctx->flag_call_digest_custom = 0;
+    if (pctx != NULL) {
+        /* do_sigver_init() checked that |digest_custom| is non-NULL */
+        if (pctx->flag_call_digest_custom
+            && !ctx->pctx->pmeth->digest_custom(ctx->pctx, ctx))
+            return 0;
+        pctx->flag_call_digest_custom = 0;
+    }
 
     return EVP_DigestUpdate(ctx, data, dsize);
 }
 
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
 int EVP_DigestSignFinal(EVP_MD_CTX *ctx, unsigned char *sigret,
                         size_t *siglen)
 {
@@ -550,4 +557,4 @@ int EVP_DigestVerify(EVP_MD_CTX *ctx, const unsigned char *sigret,
         return -1;
     return EVP_DigestVerifyFinal(ctx, sigret, siglen);
 }
-#endif /* FIPS_MODE */
+#endif /* FIPS_MODULE */

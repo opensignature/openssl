@@ -872,7 +872,10 @@ int ssl_build_cert_chain(SSL *s, SSL_CTX *ctx, int flags)
             untrusted = cpk->chain;
     }
 
-    xs_ctx = X509_STORE_CTX_new_with_libctx(s->ctx->libctx, s->ctx->propq);
+    if (s == NULL)
+        xs_ctx = X509_STORE_CTX_new_with_libctx(ctx->libctx, ctx->propq);
+    else
+        xs_ctx = X509_STORE_CTX_new_with_libctx(s->ctx->libctx, s->ctx->propq);
     if (xs_ctx == NULL) {
         SSLerr(SSL_F_SSL_BUILD_CERT_CHAIN, ERR_R_MALLOC_FAILURE);
         goto err;
@@ -1065,19 +1068,20 @@ int ssl_cert_lookup_by_nid(int nid, size_t *pidx)
 
 const SSL_CERT_LOOKUP *ssl_cert_lookup_by_pkey(const EVP_PKEY *pk, size_t *pidx)
 {
-    int nid = EVP_PKEY_id(pk);
-    size_t tmpidx;
+    size_t i;
 
-    if (nid == NID_undef)
-        return NULL;
+    for (i = 0; i < OSSL_NELEM(ssl_cert_info); i++) {
+        const SSL_CERT_LOOKUP *tmp_lu = &ssl_cert_info[i];
 
-    if (!ssl_cert_lookup_by_nid(nid, &tmpidx))
-        return NULL;
+        if (EVP_PKEY_is_a(pk, OBJ_nid2sn(tmp_lu->nid))
+            || EVP_PKEY_is_a(pk, OBJ_nid2ln(tmp_lu->nid))) {
+            if (pidx != NULL)
+                *pidx = i;
+            return tmp_lu;
+        }
+    }
 
-    if (pidx != NULL)
-        *pidx = tmpidx;
-
-    return &ssl_cert_info[tmpidx];
+    return NULL;
 }
 
 const SSL_CERT_LOOKUP *ssl_cert_lookup_by_idx(size_t idx)

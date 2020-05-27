@@ -148,8 +148,8 @@ extern const OSSL_DISPATCH idea128cfb64_functions[];
 #ifndef OPENSSL_NO_CAST
 extern const OSSL_DISPATCH cast5128ecb_functions[];
 extern const OSSL_DISPATCH cast5128cbc_functions[];
-extern const OSSL_DISPATCH cast564ofb64_functions[];
-extern const OSSL_DISPATCH cast564cfb64_functions[];
+extern const OSSL_DISPATCH cast5128ofb64_functions[];
+extern const OSSL_DISPATCH cast5128cfb64_functions[];
 #endif /* OPENSSL_NO_CAST */
 #ifndef OPENSSL_NO_SEED
 extern const OSSL_DISPATCH seed128ecb_functions[];
@@ -181,7 +181,7 @@ extern const OSSL_DISPATCH rc2128ofb128_functions[];
 #ifndef OPENSSL_NO_DES
 extern const OSSL_DISPATCH tdes_ede3_ecb_functions[];
 extern const OSSL_DISPATCH tdes_ede3_cbc_functions[];
-# ifndef FIPS_MODE
+# ifndef FIPS_MODULE
 extern const OSSL_DISPATCH tdes_ede3_ofb_functions[];
 extern const OSSL_DISPATCH tdes_ede3_cfb_functions[];
 extern const OSSL_DISPATCH tdes_ede3_cfb8_functions[];
@@ -201,7 +201,7 @@ extern const OSSL_DISPATCH des_ofb64_functions[];
 extern const OSSL_DISPATCH des_cfb64_functions[];
 extern const OSSL_DISPATCH des_cfb1_functions[];
 extern const OSSL_DISPATCH des_cfb8_functions[];
-# endif /* FIPS_MODE */
+# endif /* FIPS_MODULE */
 #endif /* OPENSSL_NO_DES */
 
 #ifndef OPENSSL_NO_RC4
@@ -257,6 +257,7 @@ extern const OSSL_DISPATCH kdf_krb5kdf_functions[];
 extern const OSSL_DISPATCH dh_keymgmt_functions[];
 extern const OSSL_DISPATCH dsa_keymgmt_functions[];
 extern const OSSL_DISPATCH rsa_keymgmt_functions[];
+extern const OSSL_DISPATCH rsapss_keymgmt_functions[];
 extern const OSSL_DISPATCH x25519_keymgmt_functions[];
 extern const OSSL_DISPATCH x448_keymgmt_functions[];
 extern const OSSL_DISPATCH ed25519_keymgmt_functions[];

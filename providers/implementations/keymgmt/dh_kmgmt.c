@@ -235,8 +235,8 @@ err:
     OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_GINDEX, NULL),                          \
     OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_PCOUNTER, NULL),                        \
     OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_H, NULL),                               \
-    OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_FFC_GROUP, NULL, 0),                \
-    OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_FFC_SEED, NULL, 0)
+    OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_FFC_SEED, NULL, 0),                \
+    OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_DH_GROUP, NULL, 0)
 # define DH_IMEXPORTABLE_PUBLIC_KEY                                            \
     OSSL_PARAM_BN(OSSL_PKEY_PARAM_PUB_KEY, NULL, 0)
 # define DH_IMEXPORTABLE_PRIVATE_KEY                                           \
@@ -322,6 +322,8 @@ static int dh_validate_public(DH *dh)
     const BIGNUM *pub_key = NULL;
 
     DH_get0_key(dh, &pub_key, NULL);
+    if (pub_key == NULL)
+        return 0;
     return DH_check_pub_key_ex(dh, pub_key);
 }
 
@@ -331,6 +333,8 @@ static int dh_validate_private(DH *dh)
     const BIGNUM *priv_key = NULL;
 
     DH_get0_key(dh, NULL, &priv_key);
+    if (priv_key == NULL)
+        return 0;
     return dh_check_priv_key(dh, priv_key, &status);;
 }
 
@@ -423,7 +427,7 @@ static int dh_gen_set_params(void *genctx, const OSSL_PARAM params[])
             return 0;
         }
     }
-    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_FFC_GROUP);
+    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_DH_GROUP);
     if (p != NULL) {
         if (p->data_type != OSSL_PARAM_UTF8_STRING
            || ((gctx->group_nid = ffc_named_group_to_uid(p->data)) == NID_undef)) {
@@ -432,7 +436,7 @@ static int dh_gen_set_params(void *genctx, const OSSL_PARAM params[])
         }
         gctx->gen_type = DH_PARAMGEN_TYPE_GROUP;
     }
-    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_FFC_GENERATOR);
+    p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_DH_GENERATOR);
     if (p != NULL && !OSSL_PARAM_get_int(p, &gctx->generator))
         return 0;
     p = OSSL_PARAM_locate_const(params, OSSL_PKEY_PARAM_FFC_GINDEX);
@@ -482,7 +486,9 @@ static int dh_gen_set_params(void *genctx, const OSSL_PARAM params[])
 static const OSSL_PARAM *dh_gen_settable_params(void *provctx)
 {
     static OSSL_PARAM settable[] = {
-        OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_FFC_GROUP, NULL, 0),
+        OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_DH_GROUP, NULL, 0),
+        OSSL_PARAM_int(OSSL_PKEY_PARAM_DH_PRIV_LEN, NULL),
+        OSSL_PARAM_int(OSSL_PKEY_PARAM_DH_GENERATOR, NULL),
         OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_FFC_TYPE, NULL, 0),
         OSSL_PARAM_size_t(OSSL_PKEY_PARAM_FFC_PBITS, NULL),
         OSSL_PARAM_size_t(OSSL_PKEY_PARAM_FFC_QBITS, NULL),
@@ -490,10 +496,8 @@ static const OSSL_PARAM *dh_gen_settable_params(void *provctx)
         OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_FFC_DIGEST_PROPS, NULL, 0),
         OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_GINDEX, NULL),
         OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_FFC_SEED, NULL, 0),
-        OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_GENERATOR, NULL),
         OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_PCOUNTER, NULL),
         OSSL_PARAM_int(OSSL_PKEY_PARAM_FFC_H, NULL),
-        OSSL_PARAM_int(OSSL_PKEY_PARAM_DH_PRIV_LEN, NULL),
         OSSL_PARAM_END
     };
     return settable;

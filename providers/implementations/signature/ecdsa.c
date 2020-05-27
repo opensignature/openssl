@@ -60,6 +60,7 @@ static OSSL_OP_signature_settable_ctx_md_params_fn ecdsa_settable_ctx_md_params;
 
 typedef struct {
     OPENSSL_CTX *libctx;
+    char *propq;
     EC_KEY *ec;
     char mdname[OSSL_MAX_NAME_SIZE];
 
@@ -90,7 +91,7 @@ typedef struct {
     BIGNUM *r;
 } PROV_ECDSA_CTX;
 
-static void *ecdsa_newctx(void *provctx)
+static void *ecdsa_newctx(void *provctx, const char *propq)
 {
     PROV_ECDSA_CTX *ctx = OPENSSL_zalloc(sizeof(PROV_ECDSA_CTX));
 
@@ -98,6 +99,11 @@ static void *ecdsa_newctx(void *provctx)
         return NULL;
 
     ctx->libctx = PROV_LIBRARY_CONTEXT_OF(provctx);
+    if (propq != NULL && (ctx->propq = OPENSSL_strdup(propq)) == NULL) {
+        OPENSSL_free(ctx);
+        ctx = NULL;
+        ERR_raise(ERR_LIB_PROV, ERR_R_MALLOC_FAILURE);
+    }
     return ctx;
 }
 
@@ -203,7 +209,7 @@ static void free_md(PROV_ECDSA_CTX *ctx)
 }
 
 static int ecdsa_digest_signverify_init(void *vctx, const char *mdname,
-                                        const char *props, void *ec)
+                                        void *ec)
 {
     PROV_ECDSA_CTX *ctx = (PROV_ECDSA_CTX *)vctx;
     int md_nid = NID_undef;
@@ -214,7 +220,7 @@ static int ecdsa_digest_signverify_init(void *vctx, const char *mdname,
     if (!ecdsa_signature_init(vctx, ec))
         return 0;
 
-    ctx->md = EVP_MD_fetch(ctx->libctx, mdname, props);
+    ctx->md = EVP_MD_fetch(ctx->libctx, mdname, ctx->propq);
     if ((md_nid = get_md_nid(ctx->md)) == NID_undef)
         goto error;
 
@@ -232,7 +238,7 @@ static int ecdsa_digest_signverify_init(void *vctx, const char *mdname,
      */
     ctx->aid_len = 0;
     if (WPACKET_init_der(&pkt, ctx->aid_buf, sizeof(ctx->aid_buf))
-        && DER_w_algorithmIdentifier_ECDSA_with(&pkt, -1, ctx->ec, md_nid)
+        && DER_w_algorithmIdentifier_ECDSA_with_MD(&pkt, -1, ctx->ec, md_nid)
         && WPACKET_finish(&pkt)) {
         WPACKET_get_total_written(&pkt, &ctx->aid_len);
         ctx->aid = WPACKET_get_curr(&pkt);

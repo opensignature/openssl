@@ -518,15 +518,31 @@ const EVP_CIPHER *EVP_##cname##_ecb(void) { return &cname##_ecb; }
  *     (type != EVP_PKEY_NONE && pkey.ptr != NULL)      ## legacy (libcrypto only)
  *     || (keymgmt != NULL && keydata != NULL)          ## provider side
  *
- * The easiest way to detect a legacy key is:           type != EVP_PKEY_NONE
- * The easiest way to detect a provider side key is:    keymgmt != NULL
+ * The easiest way to detect a legacy key is:
+ *
+ *     keymgmt == NULL && type != EVP_PKEY_NONE
+ *
+ * The easiest way to detect a provider side key is:
+ *
+ *     keymgmt != NULL
  */
+#define evp_pkey_is_blank(pk)                                   \
+    ((pk)->type == EVP_PKEY_NONE && (pk)->keymgmt == NULL)
+#define evp_pkey_is_typed(pk)                                   \
+    ((pk)->type != EVP_PKEY_NONE || (pk)->keymgmt != NULL)
+#define evp_pkey_is_assigned(pk)                                \
+    ((pk)->pkey.ptr != NULL || (pk)->keydata != NULL)
+#define evp_pkey_is_legacy(pk)                                  \
+    ((pk)->type != EVP_PKEY_NONE && (pk)->keymgmt == NULL)
+#define evp_pkey_is_provided(pk)                                \
+    ((pk)->keymgmt != NULL)
+
 struct evp_pkey_st {
     /* == Legacy attributes == */
     int type;
     int save_type;
 
-# ifndef FIPS_MODE
+# ifndef FIPS_MODULE
     /*
      * Legacy key "origin" is composed of a pointer to an EVP_PKEY_ASN1_METHOD,
      * a pointer to a low level key and possibly a pointer to an engine.
@@ -557,7 +573,7 @@ struct evp_pkey_st {
     CRYPTO_RWLOCK *lock;
     STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */
     int save_parameters;
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
     CRYPTO_EX_DATA ex_data;
 #endif
 
@@ -633,7 +649,7 @@ void evp_app_cleanup_int(void);
 void *evp_pkey_export_to_provider(EVP_PKEY *pk, OPENSSL_CTX *libctx,
                                   EVP_KEYMGMT **keymgmt,
                                   const char *propquery);
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
 int evp_pkey_downgrade(EVP_PKEY *pk);
 void evp_pkey_free_legacy(EVP_PKEY *x);
 #endif
@@ -678,10 +694,6 @@ int evp_keymgmt_gen_set_params(const EVP_KEYMGMT *keymgmt, void *genctx,
                                const OSSL_PARAM params[]);
 const OSSL_PARAM *
 evp_keymgmt_gen_settable_params(const EVP_KEYMGMT *keymgmt);
-int evp_keymgmt_gen_get_params(const EVP_KEYMGMT *keymgmt, void *genctx,
-                               OSSL_PARAM params[]);
-const OSSL_PARAM *
-evp_keymgmt_gen_gettable_params(const EVP_KEYMGMT *keymgmt);
 void *evp_keymgmt_gen(const EVP_KEYMGMT *keymgmt, void *genctx,
                       OSSL_CALLBACK *cb, void *cbarg);
 void evp_keymgmt_gen_cleanup(const EVP_KEYMGMT *keymgmt, void *genctx);
@@ -723,7 +735,7 @@ void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags);
 const EVP_CIPHER *evp_get_cipherbyname_ex(OPENSSL_CTX *libctx, const char *name);
 const EVP_MD *evp_get_digestbyname_ex(OPENSSL_CTX *libctx, const char *name);
 
-#ifndef FIPS_MODE
+#ifndef FIPS_MODULE
 /*
  * Internal helpers for stricter EVP_PKEY_CTX_{set,get}_params().
  *
@@ -731,7 +743,7 @@ const EVP_MD *evp_get_digestbyname_ex(OPENSSL_CTX *libctx, const char *name);
  *
  * In particular they return -2 if any of the params is not supported.
  *
- * They are not available in FIPS_MODE as they depend on
+ * They are not available in FIPS_MODULE as they depend on
  *      - EVP_PKEY_CTX_{get,set}_params()
  *      - EVP_PKEY_CTX_{gettable,settable}_params()
  *
@@ -741,4 +753,4 @@ int evp_pkey_ctx_get_params_strict(EVP_PKEY_CTX *ctx, OSSL_PARAM *params);
 
 EVP_PKEY *evp_pkcs82pkey_int(const PKCS8_PRIV_KEY_INFO *p8, OPENSSL_CTX *libctx,
                              const char *propq);
-#endif /* !defined(FIPS_MODE) */
+#endif /* !defined(FIPS_MODULE) */

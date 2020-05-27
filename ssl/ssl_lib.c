@@ -2303,6 +2303,15 @@ int SSL_renegotiate_pending(const SSL *s)
     return (s->renegotiate != 0);
 }
 
+int SSL_new_session_ticket(SSL *s)
+{
+    if (SSL_in_init(s) || SSL_IS_FIRST_HANDSHAKE(s) || !s->server
+            || !SSL_IS_TLS13(s))
+        return 0;
+    s->ext.extra_tickets_expected++;
+    return 1;
+}
+
 long SSL_ctrl(SSL *s, int cmd, long larg, void *parg)
 {
     long l;
@@ -3486,11 +3495,11 @@ void ssl_set_masks(SSL *s)
 
 #ifndef OPENSSL_NO_GOST
     if (ssl_has_cert(s, SSL_PKEY_GOST12_512)) {
-        mask_k |= SSL_kGOST;
+        mask_k |= SSL_kGOST | SSL_kGOST18;
         mask_a |= SSL_aGOST12;
     }
     if (ssl_has_cert(s, SSL_PKEY_GOST12_256)) {
-        mask_k |= SSL_kGOST;
+        mask_k |= SSL_kGOST | SSL_kGOST18;
         mask_a |= SSL_aGOST12;
     }
     if (ssl_has_cert(s, SSL_PKEY_GOST01)) {

@@ -5,7 +5,6 @@ Please visit our [Getting Started][gs] page for other ideas about how to contrib
 
   [gs]: https://www.openssl.org/community/getting-started.html
 
-
 Development is done on GitHub in the [openssl/openssl][gh] repository.
 
   [gh]: https://github.com/openssl/openssl
@@ -30,14 +29,17 @@ guidelines:
     [CLA]: https://www.openssl.org/policies/cla.html
 
     To amend a missing "`CLA: trivial`" line after submission, do the following:
+
     ```
         git commit --amend
         [add the line, save and quit the editor]
         git push -f
     ```
+
  2. All source files should start with the following text (with
     appropriate comment characters at the start of each line and the
     year(s) updated):
+
     ```
         Copyright 20xx-20yy The OpenSSL Project Authors. All Rights Reserved.
 
@@ -70,18 +72,20 @@ guidelines:
     documentation changes are clean.
 
  7. For user visible changes (API changes, behaviour changes, ...),
-    consider adding a note in [CHANGES](CHANGES).  This could be a summarising
-    description of the change, and could explain the grander details.
+    consider adding a note in [CHANGES.md](CHANGES.md).
+    This could be a summarising description of the change, and could
+    explain the grander details.
     Have a look through existing entries for inspiration.
     Please note that this is NOT simply a copy of git-log one-liners.
-    Also note that security fixes get an entry in CHANGES.
+    Also note that security fixes get an entry in CHANGES.md.
     This file helps users get more in depth information of what comes
     with a specific release without having to sift through the higher
     noise ratio in git-log.
 
  8. For larger or more important user visible changes, as well as
-    security fixes, please add a line in [NEWS](NEWS).  On exception, it might be
-    worth adding a multi-line entry (such as the entry that announces all
-    the types that became opaque with OpenSSL 1.1.0).
+    security fixes, please add a line in [NEWS.md](NEWS.md).
+    On exception, it might be worth adding a multi-line entry (such as
+    the entry that announces all the types that became opaque with
+    OpenSSL 1.1.0).
     This file helps users get a very quick summary of what comes with a
     specific release, to see if an upgrade is worth the effort.

@@ -1,7 +1,7 @@
 /*
  * Copyright 2019-2020 The OpenSSL Project Authors. All Rights Reserved.
  *
- * Licensed under the OpenSSL license (the "License").  You may not use
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
  * in the file LICENSE in the source distribution or at
  * https://www.openssl.org/source/license.html
@@ -130,7 +130,7 @@ DEP_FINI_ATTRIBUTE void cleanup(void)
  * the result matches the expected value.
  * Return 1 if verified, or 0 if it fails.
  */
-static int verify_integrity(BIO *bio, OSSL_BIO_read_ex_fn read_ex_cb,
+static int verify_integrity(OSSL_CORE_BIO *bio, OSSL_BIO_read_ex_fn read_ex_cb,
                             unsigned char *expected, size_t expected_len,
                             OPENSSL_CTX *libctx, OSSL_SELF_TEST *ev,
                             const char *event_type)
@@ -188,7 +188,7 @@ int SELF_TEST_post(SELF_TEST_POST_PARAMS *st, int on_demand_test)
     int ok = 0;
     int kats_already_passed = 0;
     long checksum_len;
-    BIO *bio_module = NULL, *bio_indicator = NULL;
+    OSSL_CORE_BIO *bio_module = NULL, *bio_indicator = NULL;
     unsigned char *module_checksum = NULL;
     unsigned char *indicator_checksum = NULL;
     int loclstate;

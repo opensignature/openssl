@@ -253,7 +253,7 @@ although this may be ignored by providers.
 OP_signature_digest_sign_update() provides data to be signed in the I<data>
 parameter which should be of length I<datalen>. A previously initialised
 signature context is passed in the I<ctx> parameter. This function may be called
-multiple times to cummulatively add data to be signed.
+multiple times to cumulatively add data to be signed.
 
 OP_signature_digest_sign_final() finalises a signature operation previously
 started through OP_signature_digest_sign_init() and
@@ -288,7 +288,7 @@ although this may be ignored by providers.
 OP_signature_digest_verify_update() provides data to be verified in the I<data>
 parameter which should be of length I<datalen>. A previously initialised
 verification context is passed in the I<ctx> parameter. This function may be
-called multiple times to cummulatively add data to be verified.
+called multiple times to cumulatively add data to be verified.
 
 OP_signature_digest_verify_final() finalises a verification operation previously
 started through OP_signature_digest_verify_init() and
@@ -303,7 +303,7 @@ initialised verification context is passed in the I<ctx> parameter. The data to 
 verified is in I<tbs> which should be I<tbslen> bytes long. The signature to be
 verified is in I<sig> which is I<siglen> bytes long.
 
-=head2 Signature Parameters
+=head2 Signature parameters
 
 See L<OSSL_PARAM(3)> for further details on the parameters structure used by
 the OP_signature_get_ctx_params() and OP_signature_set_ctx_params() functions.
@@ -314,17 +314,20 @@ OP_signature_set_ctx_params() sets the signature parameters associated with the
 given provider side signature context I<ctx> to I<params>.
 Any parameter settings are additional to any that were previously set.
 
-Parameters currently recognised by built-in signature algorithms are as
+Common parameters currently recognised by built-in signature algorithms are as
 follows.
-Not all parameters are relevant to, or are understood by all signature
-algorithms:
 
 =over 4
 
 =item "digest" (B<OSSL_SIGNATURE_PARAM_DIGEST>) <UTF8 string>
 
 Get or sets the name of the digest algorithm used for the input to the signature
-functions.
+functions. It is required in order to calculate the "algorithm-id".
+
+= item "properties" (B<OSSL_SIGNATURE_PARAM_PROPERTIES>) <UTF8 string>
+
+Sets the name of the property query associated with the "digest" algorithm.
+NULL is used if this optional value is not set.
 
 =item "digest-size" (B<OSSL_SIGNATURE_PARAM_DIGEST_SIZE>) <unsigned integer>
 
@@ -347,7 +350,7 @@ By default it retries until a signature is calculated.
 Setting the value to 0 causes the sign operation to retry,
 otherwise the sign operation is only tried once and returns whether or not it
 was successful.
-Known answer tests can be performed if the random generator is overriden to
+Known answer tests can be performed if the random generator is overridden to
 supply known values that either pass or fail.
 
 =back
@@ -358,7 +361,7 @@ i.e. parameters that can be used with OP_signature_get_ctx_params() and
 OP_signature_set_ctx_params() respectively.
 See L<OSSL_PARAM(3)> for the use of B<OSSL_PARAM> as parameter descriptor.
 
-=head2 MD Parameters
+=head2 MD parameters
 
 See L<OSSL_PARAM(3)> for further details on the parameters structure used by
 the OP_signature_get_md_ctx_params() and OP_signature_set_md_ctx_params()

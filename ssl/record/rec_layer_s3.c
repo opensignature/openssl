@@ -303,8 +303,13 @@ int ssl3_read_n(SSL *s, size_t n, size_t max, int extend, int clearold,
             if (ret <= 0
                     && !BIO_should_retry(s->rbio)
                     && BIO_eof(s->rbio)) {
-                SSLfatal(s, SSL_AD_DECODE_ERROR, SSL_F_SSL3_READ_N,
-                         SSL_R_UNEXPECTED_EOF_WHILE_READING);
+                if (s->options & SSL_OP_IGNORE_UNEXPECTED_EOF) {
+                    SSL_set_shutdown(s, SSL_RECEIVED_SHUTDOWN);
+                    s->s3.warn_alert = SSL_AD_CLOSE_NOTIFY;
+                } else {
+                    SSLfatal(s, SSL_AD_DECODE_ERROR, SSL_F_SSL3_READ_N,
+                             SSL_R_UNEXPECTED_EOF_WHILE_READING);
+                }
             }
         } else {
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_SSL3_READ_N,
@@ -384,10 +389,12 @@ int ssl3_write_bytes(SSL *s, int type, const void *buf_, size_t len,
     s->rlayer.wnum = 0;
 
     /*
-     * If we are supposed to be sending a KeyUpdate then go into init unless we
-     * have writes pending - in which case we should finish doing that first.
+     * If we are supposed to be sending a KeyUpdate or NewSessionTicket then go
+     * into init unless we have writes pending - in which case we should finish
+     * doing that first.
      */
-    if (wb->left == 0 && s->key_update != SSL_KEY_UPDATE_NONE)
+    if (wb->left == 0 && (s->key_update != SSL_KEY_UPDATE_NONE
+                          || s->ext.extra_tickets_expected > 0))
         ossl_statem_set_in_init(s, 1);
 
     /*

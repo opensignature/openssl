@@ -761,9 +761,10 @@ int EC_POINT_is_on_curve(const EC_GROUP *group, const EC_POINT *point,
 int EC_POINT_cmp(const EC_GROUP *group, const EC_POINT *a, const EC_POINT *b,
                  BN_CTX *ctx);
 
-int EC_POINT_make_affine(const EC_GROUP *group, EC_POINT *point, BN_CTX *ctx);
-int EC_POINTs_make_affine(const EC_GROUP *group, size_t num,
-                          EC_POINT *points[], BN_CTX *ctx);
+DEPRECATEDIN_3_0(int EC_POINT_make_affine(const EC_GROUP *group,
+                                          EC_POINT *point, BN_CTX *ctx))
+DEPRECATEDIN_3_0(int EC_POINTs_make_affine(const EC_GROUP *group, size_t num,
+                                           EC_POINT *points[], BN_CTX *ctx))
 
 /** Computes r = generator * n + sum_{i=0}^{num-1} p[i] * m[i]
  *  \param  group  underlying EC_GROUP object
@@ -775,9 +776,10 @@ int EC_POINTs_make_affine(const EC_GROUP *group, size_t num,
  *  \param  ctx    BN_CTX object (optional)
  *  \return 1 on success and 0 if an error occurred
  */
-int EC_POINTs_mul(const EC_GROUP *group, EC_POINT *r, const BIGNUM *n,
-                  size_t num, const EC_POINT *p[], const BIGNUM *m[],
-                  BN_CTX *ctx);
+DEPRECATEDIN_3_0(int EC_POINTs_mul(const EC_GROUP *group, EC_POINT *r,
+                                   const BIGNUM *n, size_t num,
+                                   const EC_POINT *p[], const BIGNUM *m[],
+                                   BN_CTX *ctx))
 
 /** Computes r = generator * n + q * m
  *  \param  group  underlying EC_GROUP object
@@ -796,13 +798,13 @@ int EC_POINT_mul(const EC_GROUP *group, EC_POINT *r, const BIGNUM *n,
  *  \param  ctx    BN_CTX object (optional)
  *  \return 1 on success and 0 if an error occurred
  */
-int EC_GROUP_precompute_mult(EC_GROUP *group, BN_CTX *ctx);
+DEPRECATEDIN_3_0(int EC_GROUP_precompute_mult(EC_GROUP *group, BN_CTX *ctx))
 
 /** Reports whether a precomputation has been done
  *  \param  group  EC_GROUP object
  *  \return 1 if a pre-computation has been done and 0 otherwise
  */
-int EC_GROUP_have_precompute_mult(const EC_GROUP *group);
+DEPRECATEDIN_3_0(int EC_GROUP_have_precompute_mult(const EC_GROUP *group))
 
 /********************************************************************/
 /*                       ASN1 stuff                                 */
@@ -990,7 +992,7 @@ void EC_KEY_set_asn1_flag(EC_KEY *eckey, int asn1_flag);
  *  \param  ctx  BN_CTX object (optional)
  *  \return 1 on success and 0 if an error occurred.
  */
-int EC_KEY_precompute_mult(EC_KEY *key, BN_CTX *ctx);
+DEPRECATEDIN_3_0(int EC_KEY_precompute_mult(EC_KEY *key, BN_CTX *ctx))
 
 /** Creates a new ec private (and optional a new public) key.
  *  \param  key  EC_KEY object

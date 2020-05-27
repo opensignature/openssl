@@ -236,8 +236,8 @@ int evp_keymgmt_util_has(EVP_PKEY *pk, int selection)
  * but also in the operation cache to see if there's any common keymgmt that
  * supplies OP_keymgmt_match.
  *
- * evp_keymgmt_util_match() adheres to the return values that EVP_PKEY_cmp()
- * and EVP_PKEY_cmp_parameters() return, i.e.:
+ * evp_keymgmt_util_match() adheres to the return values that EVP_PKEY_eq()
+ * and EVP_PKEY_parameters_eq() return, i.e.:
  *
  *  1   same key
  *  0   not same key
@@ -346,10 +346,19 @@ int evp_keymgmt_util_copy(EVP_PKEY *to, EVP_PKEY *from, int selection)
     if (from == NULL || from->keydata == NULL)
         return 0;
 
+    /*
+     * If |to| is unassigned, ensure it gets the same KEYMGMT as |from|,
+     * Note that the final setting of KEYMGMT is done further down, with
+     * EVP_PKEY_set_type_by_keymgmt(); we don't want to do that prematurely.
+     */
+    if (to_keymgmt == NULL)
+        to_keymgmt = from->keymgmt;
+
     if (to_keymgmt == from->keymgmt && to_keymgmt->copy != NULL) {
         /* Make sure there's somewhere to copy to */
         if (to_keydata == NULL
-            && (to_keydata = evp_keymgmt_newdata(to_keymgmt)) == NULL) {
+            && ((to_keydata = alloc_keydata = evp_keymgmt_newdata(to_keymgmt))
+                == NULL)) {
             ERR_raise(ERR_LIB_EVP, ERR_R_MALLOC_FAILURE);
             return 0;
         }
@@ -375,10 +384,11 @@ int evp_keymgmt_util_copy(EVP_PKEY *to, EVP_PKEY *from, int selection)
         }
 
         /*
-         * In this case to_keydata was previously unallocated, try_import()
+         * In case to_keydata was previously unallocated, try_import()
          * may have created it for us.
          */
-        to_keydata = import_data.keydata;
+        if (to_keydata == NULL)
+            to_keydata = alloc_keydata = import_data.keydata;
     } else {
         ERR_raise(ERR_LIB_EVP, EVP_R_DIFFERENT_KEY_TYPES);
         return 0;
